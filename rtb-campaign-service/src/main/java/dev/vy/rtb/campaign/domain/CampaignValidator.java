@@ -50,6 +50,8 @@ final class CampaignValidator {
     } else if (in.startAt() != null && !in.endAt().isAfter(in.startAt())) {
       out.add(new Violation("endAt", "must be after startAt"));
     }
+
+    TargetingRules.validate(in.targeting(), out);
     return out;
   }
 

@@ -20,6 +20,7 @@ public final class Campaign {
   private final Integer freqCapCount;
   private final Instant startAt;
   private final Instant endAt;
+  private final Targeting targeting;
 
   private Campaign(UUID id, UUID advertiserId, NewCampaign in, CampaignStatus status) {
     this.id = id;
@@ -34,6 +35,7 @@ public final class Campaign {
     this.freqCapCount = in.freqCapCount();
     this.startAt = in.startAt();
     this.endAt = in.endAt();
+    this.targeting = TargetingRules.normalise(in.targeting());
   }
 
   /** Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation. */
@@ -57,4 +59,5 @@ public final class Campaign {
   public Integer freqCapCount() { return freqCapCount; }
   public Instant startAt() { return startAt; }
   public Instant endAt() { return endAt; }
+  public Targeting targeting() { return targeting; }
 }
