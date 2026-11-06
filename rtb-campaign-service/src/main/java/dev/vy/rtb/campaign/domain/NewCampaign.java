@@ -35,21 +35,68 @@ public record NewCampaign(
     private Instant endAt;
     private TargetingInput targeting;
 
-    public Builder name(String v) { this.name = v; return this; }
-    public Builder dailyBudgetMicros(long v) { this.dailyBudgetMicros = v; return this; }
-    public Builder totalBudgetMicros(long v) { this.totalBudgetMicros = v; return this; }
-    public Builder maxBidCpmMicros(long v) { this.maxBidCpmMicros = v; return this; }
-    public Builder bidStrategy(BidStrategy v) { this.bidStrategy = v; return this; }
-    public Builder pacingMode(PacingMode v) { this.pacingMode = v; return this; }
-    public Builder freqCapCount(Integer v) { this.freqCapCount = v; return this; }
-    public Builder startAt(Instant v) { this.startAt = v; return this; }
-    public Builder endAt(Instant v) { this.endAt = v; return this; }
-    public Builder targeting(TargetingInput v) { this.targeting = v; return this; }
+    public Builder name(String v) {
+      this.name = v;
+      return this;
+    }
+
+    public Builder dailyBudgetMicros(long v) {
+      this.dailyBudgetMicros = v;
+      return this;
+    }
+
+    public Builder totalBudgetMicros(long v) {
+      this.totalBudgetMicros = v;
+      return this;
+    }
+
+    public Builder maxBidCpmMicros(long v) {
+      this.maxBidCpmMicros = v;
+      return this;
+    }
+
+    public Builder bidStrategy(BidStrategy v) {
+      this.bidStrategy = v;
+      return this;
+    }
+
+    public Builder pacingMode(PacingMode v) {
+      this.pacingMode = v;
+      return this;
+    }
+
+    public Builder freqCapCount(Integer v) {
+      this.freqCapCount = v;
+      return this;
+    }
+
+    public Builder startAt(Instant v) {
+      this.startAt = v;
+      return this;
+    }
+
+    public Builder endAt(Instant v) {
+      this.endAt = v;
+      return this;
+    }
+
+    public Builder targeting(TargetingInput v) {
+      this.targeting = v;
+      return this;
+    }
 
     public NewCampaign build() {
       return new NewCampaign(
-          name, dailyBudgetMicros, totalBudgetMicros, maxBidCpmMicros, bidStrategy, pacingMode,
-          freqCapCount, startAt, endAt, targeting);
+          name,
+          dailyBudgetMicros,
+          totalBudgetMicros,
+          maxBidCpmMicros,
+          bidStrategy,
+          pacingMode,
+          freqCapCount,
+          startAt,
+          endAt,
+          targeting);
     }
   }
 }

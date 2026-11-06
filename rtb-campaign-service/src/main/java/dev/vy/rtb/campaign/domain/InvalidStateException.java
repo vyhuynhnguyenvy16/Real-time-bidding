@@ -1,6 +1,8 @@
 package dev.vy.rtb.campaign.domain;
 
-/** A transition that the state machine (docs/data-model.md 1.3) or its preconditions do not allow. */
+/**
+ * A transition that the state machine (docs/data-model.md 1.3) or its preconditions do not allow.
+ */
 public final class InvalidStateException extends RuntimeException {
 
   private final CampaignStatus currentStatus;

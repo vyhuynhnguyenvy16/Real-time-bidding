@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** A campaign. Immutable: every change returns a new instance. Built only through {@link #draft}. */
+/**
+ * A campaign. Immutable: every change returns a new instance. Built only through {@link #draft}.
+ */
 public final class Campaign {
 
   private final UUID id;
@@ -54,7 +56,9 @@ public final class Campaign {
     this.targeting = other.targeting;
   }
 
-  /** Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation. */
+  /**
+   * Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation.
+   */
   public static Campaign draft(UUID id, UUID advertiserId, NewCampaign input) {
     List<Violation> violations = CampaignValidator.validate(input);
     if (!violations.isEmpty()) {
@@ -70,7 +74,8 @@ public final class Campaign {
   public Campaign activate(Instant now, int activeCreativeCount) {
     requireStatus("activate", CampaignStatus.DRAFT);
     if (activeCreativeCount < 1) {
-      throw new InvalidStateException(status, "activate", "at least one valid creative is required");
+      throw new InvalidStateException(
+          status, "activate", "at least one valid creative is required");
     }
     if (!endAt.isAfter(now)) {
       throw new InvalidStateException(status, "activate", "endAt is not in the future");
@@ -102,7 +107,9 @@ public final class Campaign {
     return new Campaign(this, CampaignStatus.ARCHIVED);
   }
 
-  /** ACTIVE to COMPLETED; done by the system when the budget is spent or the end date has passed. */
+  /**
+   * ACTIVE to COMPLETED; done by the system when the budget is spent or the end date has passed.
+   */
   public Campaign complete() {
     requireStatus("complete", CampaignStatus.ACTIVE);
     return new Campaign(this, CampaignStatus.COMPLETED);
@@ -117,17 +124,55 @@ public final class Campaign {
     throw new InvalidStateException(status, action, "allowed only from " + List.of(allowed));
   }
 
-  public UUID id() { return id; }
-  public UUID advertiserId() { return advertiserId; }
-  public String name() { return name; }
-  public CampaignStatus status() { return status; }
-  public Money dailyBudget() { return dailyBudget; }
-  public Money totalBudget() { return totalBudget; }
-  public Money maxBidCpm() { return maxBidCpm; }
-  public BidStrategy bidStrategy() { return bidStrategy; }
-  public PacingMode pacingMode() { return pacingMode; }
-  public Integer freqCapCount() { return freqCapCount; }
-  public Instant startAt() { return startAt; }
-  public Instant endAt() { return endAt; }
-  public Targeting targeting() { return targeting; }
+  public UUID id() {
+    return id;
+  }
+
+  public UUID advertiserId() {
+    return advertiserId;
+  }
+
+  public String name() {
+    return name;
+  }
+
+  public CampaignStatus status() {
+    return status;
+  }
+
+  public Money dailyBudget() {
+    return dailyBudget;
+  }
+
+  public Money totalBudget() {
+    return totalBudget;
+  }
+
+  public Money maxBidCpm() {
+    return maxBidCpm;
+  }
+
+  public BidStrategy bidStrategy() {
+    return bidStrategy;
+  }
+
+  public PacingMode pacingMode() {
+    return pacingMode;
+  }
+
+  public Integer freqCapCount() {
+    return freqCapCount;
+  }
+
+  public Instant startAt() {
+    return startAt;
+  }
+
+  public Instant endAt() {
+    return endAt;
+  }
+
+  public Targeting targeting() {
+    return targeting;
+  }
 }

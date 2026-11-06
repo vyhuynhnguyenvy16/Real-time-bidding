@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-/** Seam: Campaign.draft(...) validates and normalises targeting (api-contract 3.3, data-model 1.2). */
+/**
+ * Seam: Campaign.draft(...) validates and normalises targeting (api-contract 3.3, data-model 1.2).
+ */
 class CampaignTargetingTest {
 
   private static TargetingInput targeting(
@@ -136,7 +138,8 @@ class CampaignTargetingTest {
 
   @Test
   void aMissingTargetingMeansNoRestriction() {
-    Targeting t = Campaign.draft(ID, ADVERTISER_ID, validInput().targeting(null).build()).targeting();
+    Targeting t =
+        Campaign.draft(ID, ADVERTISER_ID, validInput().targeting(null).build()).targeting();
 
     assertThat(t.countries()).isEmpty();
     assertThat(t.schedule().allowedHoursCount()).isEqualTo(168);

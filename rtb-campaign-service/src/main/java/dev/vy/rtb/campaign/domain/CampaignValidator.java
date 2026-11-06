@@ -16,7 +16,8 @@ final class CampaignValidator {
   static List<Violation> validate(NewCampaign in) {
     List<Violation> out = new ArrayList<>();
 
-    boolean nameOk = in.name() != null && !in.name().isBlank() && in.name().length() <= MAX_NAME_LENGTH;
+    boolean nameOk =
+        in.name() != null && !in.name().isBlank() && in.name().length() <= MAX_NAME_LENGTH;
     if (!nameOk) {
       out.add(new Violation("name", "must be 1-" + MAX_NAME_LENGTH + " characters"));
     }
@@ -33,7 +34,9 @@ final class CampaignValidator {
     if (!maxBidOk) {
       out.add(new Violation("maxBidCpmMicros", "must be greater than 0"));
     } else if (dailyOk && in.maxBidCpmMicros() > in.dailyBudgetMicros()) {
-      out.add(new Violation("maxBidCpmMicros", "the cost of 1000 impressions exceeds dailyBudgetMicros"));
+      out.add(
+          new Violation(
+              "maxBidCpmMicros", "the cost of 1000 impressions exceeds dailyBudgetMicros"));
     }
 
     validateStrategy(in, maxBidOk, out);

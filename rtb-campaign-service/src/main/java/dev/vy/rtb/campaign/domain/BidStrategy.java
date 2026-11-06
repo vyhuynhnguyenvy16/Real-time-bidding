@@ -1,6 +1,8 @@
 package dev.vy.rtb.campaign.domain;
 
-/** How the bid price is chosen. {@code valueMicros} is a CPM for FIXED_CPM, a CPC for TARGET_CPC. */
+/**
+ * How the bid price is chosen. {@code valueMicros} is a CPM for FIXED_CPM, a CPC for TARGET_CPC.
+ */
 public record BidStrategy(Type type, long valueMicros) {
 
   public enum Type {

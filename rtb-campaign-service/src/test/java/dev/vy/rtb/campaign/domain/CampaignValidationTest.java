@@ -16,7 +16,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-/** Seam: Campaign.draft(...) rejects invalid input with every violation; rules are api-contract 3.3. */
+/**
+ * Seam: Campaign.draft(...) rejects invalid input with every violation; rules are api-contract 3.3.
+ */
 class CampaignValidationTest {
 
   private static Arguments invalid(
@@ -33,11 +35,16 @@ class CampaignValidationTest {
         invalid("zero daily budget", b -> b.dailyBudgetMicros(0), "dailyBudgetMicros"),
         invalid("negative daily budget", b -> b.dailyBudgetMicros(-1), "dailyBudgetMicros"),
         invalid(
-            "daily budget above total", b -> b.dailyBudgetMicros(1_500_000_001), "totalBudgetMicros"),
-        invalid("max bid above daily budget", b -> b.maxBidCpmMicros(100_000_001), "maxBidCpmMicros"),
+            "daily budget above total",
+            b -> b.dailyBudgetMicros(1_500_000_001),
+            "totalBudgetMicros"),
+        invalid(
+            "max bid above daily budget", b -> b.maxBidCpmMicros(100_000_001), "maxBidCpmMicros"),
         invalid("zero max bid", b -> b.maxBidCpmMicros(0), "maxBidCpmMicros"),
         invalid(
-            "fixed CPM above max bid", b -> b.bidStrategy(BidStrategy.fixedCpm(2_000_001)), "bidStrategy"),
+            "fixed CPM above max bid",
+            b -> b.bidStrategy(BidStrategy.fixedCpm(2_000_001)),
+            "bidStrategy"),
         invalid("zero fixed CPM", b -> b.bidStrategy(BidStrategy.fixedCpm(0)), "bidStrategy"),
         invalid("zero target CPC", b -> b.bidStrategy(BidStrategy.targetCpc(0)), "bidStrategy"),
         invalid("missing strategy", b -> b.bidStrategy(null), "bidStrategy"),
@@ -62,13 +69,27 @@ class CampaignValidationTest {
 
   static Stream<Arguments> boundaryInputs() {
     return Stream.of(
-        Arguments.of("name of exactly 120 characters", (UnaryOperator<NewCampaign.Builder>) b -> b.name("a".repeat(120))),
-        Arguments.of("daily budget equal to total", (UnaryOperator<NewCampaign.Builder>) b -> b.dailyBudgetMicros(1_500_000_000)),
-        Arguments.of("max bid equal to daily budget", (UnaryOperator<NewCampaign.Builder>) b -> b.maxBidCpmMicros(100_000_000).bidStrategy(BidStrategy.fixedCpm(100_000_000))),
-        Arguments.of("fixed CPM equal to max bid", (UnaryOperator<NewCampaign.Builder>) b -> b.bidStrategy(BidStrategy.fixedCpm(2_000_000))),
-        Arguments.of("frequency cap of one", (UnaryOperator<NewCampaign.Builder>) b -> b.freqCapCount(1)),
-        Arguments.of("no frequency cap", (UnaryOperator<NewCampaign.Builder>) b -> b.freqCapCount(null)),
-        Arguments.of("target CPC of one micro", (UnaryOperator<NewCampaign.Builder>) b -> b.bidStrategy(BidStrategy.targetCpc(1))));
+        Arguments.of(
+            "name of exactly 120 characters",
+            (UnaryOperator<NewCampaign.Builder>) b -> b.name("a".repeat(120))),
+        Arguments.of(
+            "daily budget equal to total",
+            (UnaryOperator<NewCampaign.Builder>) b -> b.dailyBudgetMicros(1_500_000_000)),
+        Arguments.of(
+            "max bid equal to daily budget",
+            (UnaryOperator<NewCampaign.Builder>)
+                b -> b.maxBidCpmMicros(100_000_000).bidStrategy(BidStrategy.fixedCpm(100_000_000))),
+        Arguments.of(
+            "fixed CPM equal to max bid",
+            (UnaryOperator<NewCampaign.Builder>)
+                b -> b.bidStrategy(BidStrategy.fixedCpm(2_000_000))),
+        Arguments.of(
+            "frequency cap of one", (UnaryOperator<NewCampaign.Builder>) b -> b.freqCapCount(1)),
+        Arguments.of(
+            "no frequency cap", (UnaryOperator<NewCampaign.Builder>) b -> b.freqCapCount(null)),
+        Arguments.of(
+            "target CPC of one micro",
+            (UnaryOperator<NewCampaign.Builder>) b -> b.bidStrategy(BidStrategy.targetCpc(1))));
   }
 
   @ParameterizedTest(name = "{0} is accepted")
@@ -81,7 +102,8 @@ class CampaignValidationTest {
 
   @Test
   void reportsEveryViolationAtOnceWithoutCascadingFollowUpErrors() {
-    // daily budget 0 would also make "max bid <= daily budget" fail; that follow-up must not appear.
+    // daily budget 0 would also make "max bid <= daily budget" fail; that follow-up must not
+    // appear.
     NewCampaign input =
         validInput().name("").dailyBudgetMicros(0).endAt(START.minusSeconds(1)).build();
 

@@ -12,7 +12,8 @@ final class TargetingRules {
 
   private static final Set<String> ISO_ALPHA3_COUNTRIES =
       Set.copyOf(Locale.getISOCountries(Locale.IsoCountryCode.PART1_ALPHA3));
-  private static final int MIN_DEVICE_TYPE = 1; // OpenRTB devicetype: 1 mobile/tablet .. 7 set top box
+  private static final int MIN_DEVICE_TYPE =
+      1; // OpenRTB devicetype: 1 mobile/tablet .. 7 set top box
   private static final int MAX_DEVICE_TYPE = 7;
 
   private TargetingRules() {}
