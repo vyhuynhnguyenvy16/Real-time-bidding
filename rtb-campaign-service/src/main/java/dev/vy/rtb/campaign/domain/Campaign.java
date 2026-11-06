@@ -38,6 +38,22 @@ public final class Campaign {
     this.targeting = TargetingRules.normalise(in.targeting());
   }
 
+  private Campaign(Campaign other, CampaignStatus status) {
+    this.id = other.id;
+    this.advertiserId = other.advertiserId;
+    this.name = other.name;
+    this.status = status;
+    this.dailyBudget = other.dailyBudget;
+    this.totalBudget = other.totalBudget;
+    this.maxBidCpm = other.maxBidCpm;
+    this.bidStrategy = other.bidStrategy;
+    this.pacingMode = other.pacingMode;
+    this.freqCapCount = other.freqCapCount;
+    this.startAt = other.startAt;
+    this.endAt = other.endAt;
+    this.targeting = other.targeting;
+  }
+
   /** Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation. */
   public static Campaign draft(UUID id, UUID advertiserId, NewCampaign input) {
     List<Violation> violations = CampaignValidator.validate(input);
@@ -45,6 +61,60 @@ public final class Campaign {
       throw new CampaignValidationException(violations);
     }
     return new Campaign(id, advertiserId, input, CampaignStatus.DRAFT);
+  }
+
+  /**
+   * DRAFT to ACTIVE. Needs at least one valid creative and an end date that is still in the future.
+   * Creatives are not part of this aggregate yet, so the caller passes how many valid ones exist.
+   */
+  public Campaign activate(Instant now, int activeCreativeCount) {
+    requireStatus("activate", CampaignStatus.DRAFT);
+    if (activeCreativeCount < 1) {
+      throw new InvalidStateException(status, "activate", "at least one valid creative is required");
+    }
+    if (!endAt.isAfter(now)) {
+      throw new InvalidStateException(status, "activate", "endAt is not in the future");
+    }
+    return new Campaign(this, CampaignStatus.ACTIVE);
+  }
+
+  /** ACTIVE to PAUSED; pausing a paused campaign is a no-op. */
+  public Campaign pause() {
+    if (status == CampaignStatus.PAUSED) {
+      return this;
+    }
+    requireStatus("pause", CampaignStatus.ACTIVE);
+    return new Campaign(this, CampaignStatus.PAUSED);
+  }
+
+  /** PAUSED to ACTIVE; resuming an active campaign is a no-op. */
+  public Campaign resume() {
+    if (status == CampaignStatus.ACTIVE) {
+      return this;
+    }
+    requireStatus("resume", CampaignStatus.PAUSED);
+    return new Campaign(this, CampaignStatus.ACTIVE);
+  }
+
+  /** Soft delete from DRAFT, PAUSED or COMPLETED. An ACTIVE campaign must be paused first. */
+  public Campaign archive() {
+    requireStatus("archive", CampaignStatus.DRAFT, CampaignStatus.PAUSED, CampaignStatus.COMPLETED);
+    return new Campaign(this, CampaignStatus.ARCHIVED);
+  }
+
+  /** ACTIVE to COMPLETED; done by the system when the budget is spent or the end date has passed. */
+  public Campaign complete() {
+    requireStatus("complete", CampaignStatus.ACTIVE);
+    return new Campaign(this, CampaignStatus.COMPLETED);
+  }
+
+  private void requireStatus(String action, CampaignStatus... allowed) {
+    for (CampaignStatus candidate : allowed) {
+      if (status == candidate) {
+        return;
+      }
+    }
+    throw new InvalidStateException(status, action, "allowed only from " + List.of(allowed));
   }
 
   public UUID id() { return id; }
