@@ -2,6 +2,7 @@ package dev.vy.rtb.campaign.domain;
 
 import dev.vy.rtb.common.Money;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** A campaign. Immutable: every change returns a new instance. Built only through {@link #draft}. */
@@ -35,7 +36,12 @@ public final class Campaign {
     this.endAt = in.endAt();
   }
 
+  /** Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation. */
   public static Campaign draft(UUID id, UUID advertiserId, NewCampaign input) {
+    List<Violation> violations = CampaignValidator.validate(input);
+    if (!violations.isEmpty()) {
+      throw new CampaignValidationException(violations);
+    }
     return new Campaign(id, advertiserId, input, CampaignStatus.DRAFT);
   }
 
