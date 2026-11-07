@@ -14,7 +14,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +55,7 @@ public final class JdbcCampaignRepository implements CampaignRepository {
   public Stored<Campaign> insert(Campaign campaign) {
     Instant now = now();
     transactions.executeWithoutResult(
-        status -> {
+        tx -> {
           jdbc.sql(
                   """
                   INSERT INTO campaigns (id, advertiser_id, name, status, daily_budget_micros,
@@ -101,7 +100,7 @@ public final class JdbcCampaignRepository implements CampaignRepository {
     }
     Instant now = now();
     return transactions.execute(
-        status -> {
+        tx -> {
           int rows =
               jdbc.sql(
                       """
@@ -121,17 +120,25 @@ public final class JdbcCampaignRepository implements CampaignRepository {
           if (rows == 0) {
             throw new VersionConflictException(before.id(), current.version());
           }
-          jdbc.sql(
-                  """
-UPDATE campaign_targeting
-SET countries = CAST(:countries AS text[]), device_types = CAST(:devices AS smallint[]),
-    categories = CAST(:categories AS text[]),
-    publisher_blocklist = CAST(:blocklist AS text[]),
-    schedule_mask = CAST(:mask AS bit(168))
-WHERE campaign_id = :id
-""")
-              .params(targetingValues(changed))
-              .update();
+          // Tenant safety: the guarded campaigns UPDATE above already proved this campaign belongs
+          // to the advertiser and that the version matched, inside the same transaction.
+          int targetingRows =
+              jdbc.sql(
+                      """
+                      UPDATE campaign_targeting
+                      SET countries = CAST(:countries AS text[]),
+                          device_types = CAST(:devices AS smallint[]),
+                          categories = CAST(:categories AS text[]),
+                          publisher_blocklist = CAST(:blocklist AS text[]),
+                          schedule_mask = CAST(:mask AS bit(168))
+                      WHERE campaign_id = :id
+                      """)
+                  .params(targetingValues(changed))
+                  .update();
+          if (targetingRows != 1) {
+            throw new IllegalStateException(
+                "Campaign " + before.id() + " has no targeting row; the data is inconsistent");
+          }
           return new Stored<>(changed, current.version() + 1, current.createdAt(), now);
         });
   }
@@ -143,25 +150,22 @@ WHERE campaign_id = :id
       throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
     }
     StringBuilder sql = new StringBuilder(SELECT).append(" WHERE c.advertiser_id = :advertiserId");
-    List<Object[]> params = new ArrayList<>();
-    params.add(new Object[] {"advertiserId", advertiserId});
+    Map<String, Object> params = new HashMap<>();
+    params.put("advertiserId", advertiserId);
     if (status != null) {
       sql.append(" AND c.status = :status");
-      params.add(new Object[] {"status", status.name()});
+      params.put("status", status.name());
     }
     if (after != null) {
       sql.append(" AND (c.created_at, c.id) > (:afterAt, :afterId)");
-      params.add(new Object[] {"afterAt", utc(after.createdAt())});
-      params.add(new Object[] {"afterId", after.id()});
+      params.put("afterAt", utc(after.createdAt()));
+      params.put("afterId", after.id());
     }
     // One extra row tells whether another page exists.
     sql.append(" ORDER BY c.created_at, c.id LIMIT :limit");
-    params.add(new Object[] {"limit", limit + 1});
+    params.put("limit", limit + 1);
 
-    JdbcClient.StatementSpec statement = jdbc.sql(sql.toString());
-    for (Object[] param : params) {
-      statement = statement.param((String) param[0], param[1]);
-    }
+    JdbcClient.StatementSpec statement = jdbc.sql(sql.toString()).params(params);
     List<Stored<Campaign>> rows = statement.query(JdbcCampaignRepository::mapRow).list();
 
     if (rows.size() <= limit) {

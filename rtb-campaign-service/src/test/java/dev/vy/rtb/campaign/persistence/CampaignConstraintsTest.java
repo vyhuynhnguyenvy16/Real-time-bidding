@@ -11,6 +11,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -138,5 +139,57 @@ class CampaignConstraintsTest {
   @MethodSource("rowsOnTheBoundary")
   void acceptsRowsOnTheBoundary(String label, Map<String, Object> row) {
     assertThatCode(() -> insert(row)).doesNotThrowAnyException();
+  }
+
+  private void insertTargeting(
+      String countries, String devices, String categories, String blocklist) {
+    UUID campaignId = UUID.randomUUID();
+    insert(rowWith("id", campaignId));
+    jdbc.sql(
+            """
+            INSERT INTO campaign_targeting (campaign_id, countries, device_types, categories,
+                publisher_blocklist, schedule_mask)
+            VALUES (:id, CAST(:countries AS text[]), CAST(:devices AS smallint[]),
+                CAST(:categories AS text[]), CAST(:blocklist AS text[]), CAST(:mask AS bit(168)))
+            """)
+        .param("id", campaignId)
+        .param("countries", countries)
+        .param("devices", devices)
+        .param("categories", categories)
+        .param("blocklist", blocklist)
+        .param("mask", "1".repeat(168))
+        .update();
+  }
+
+  @ParameterizedTest(
+      name = "targeting countries={0} devices={1} categories={2} blocklist={3} is rejected")
+  @CsvSource(
+      delimiter = '|',
+      value = {
+        "{vn}|{}|{}|{}",
+        "{VN}|{}|{}|{}",
+        "{VNMM}|{}|{}|{}",
+        "{VNM,usa}|{}|{}|{}",
+        "{}|{0}|{}|{}",
+        "{}|{8}|{}|{}",
+        "{}|{1,9}|{}|{}",
+        "{}|{}|{IAB17}|{}",
+        "{}|{}|{}|{Example.COM}"
+      })
+  void rejectsTargetingThatBreaksADomainRule(
+      String countries, String devices, String categories, String blocklist) {
+    assertThatThrownBy(() -> insertTargeting(countries, devices, categories, blocklist))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  @ParameterizedTest(
+      name = "targeting countries={0} devices={1} categories={2} blocklist={3} is accepted")
+  @CsvSource(
+      delimiter = '|',
+      value = {"{}|{}|{}|{}", "{VNM,USA}|{1,7}|{iab17,iab1}|{a.com,b.example}"})
+  void acceptsTargetingOnTheBoundary(
+      String countries, String devices, String categories, String blocklist) {
+    assertThatCode(() -> insertTargeting(countries, devices, categories, blocklist))
+        .doesNotThrowAnyException();
   }
 }

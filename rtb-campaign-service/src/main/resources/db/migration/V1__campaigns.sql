@@ -61,5 +61,15 @@ CREATE TABLE campaign_targeting (
     categories          text[]     NOT NULL DEFAULT '{}',
     publisher_blocklist text[]     NOT NULL DEFAULT '{}',
     -- 7 days x 24 hours; bit 0 = Monday 00:00 (Asia/Ho_Chi_Minh), all ones = always.
-    schedule_mask       bit(168)   NOT NULL
+    schedule_mask       bit(168)   NOT NULL,
+
+    -- Same rules as the domain: ISO alpha-3 countries, devicetype 1-7, lowercase categories/blocklist.
+    CONSTRAINT targeting_countries_alpha3
+        CHECK (array_to_string(countries, ',') ~ '^([A-Z]{3}(,[A-Z]{3})*)?$'),
+    CONSTRAINT targeting_device_types_range
+        CHECK (device_types <@ ARRAY[1, 2, 3, 4, 5, 6, 7]::smallint[]),
+    CONSTRAINT targeting_categories_lowercase
+        CHECK (array_to_string(categories, ',') = lower(array_to_string(categories, ','))),
+    CONSTRAINT targeting_blocklist_lowercase
+        CHECK (array_to_string(publisher_blocklist, ',') = lower(array_to_string(publisher_blocklist, ',')))
 );
