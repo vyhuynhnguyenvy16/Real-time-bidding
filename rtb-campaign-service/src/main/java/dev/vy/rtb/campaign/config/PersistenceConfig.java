@@ -1,6 +1,7 @@
 package dev.vy.rtb.campaign.config;
 
 import dev.vy.rtb.campaign.persistence.CampaignRepository;
+import dev.vy.rtb.campaign.persistence.CreativeCounter;
 import dev.vy.rtb.campaign.persistence.JdbcCampaignRepository;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
@@ -20,5 +21,11 @@ class PersistenceConfig {
   CampaignRepository campaignRepository(
       JdbcClient jdbc, TransactionOperations transactions, Clock clock) {
     return new JdbcCampaignRepository(jdbc, transactions, clock);
+  }
+
+  /** Placeholder until creatives exist (next PR): no creative, so no campaign can be activated. */
+  @Bean
+  CreativeCounter creativeCounter() {
+    return (advertiserId, campaignId) -> 0;
   }
 }

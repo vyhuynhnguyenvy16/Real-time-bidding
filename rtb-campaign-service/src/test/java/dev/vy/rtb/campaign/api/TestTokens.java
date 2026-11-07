@@ -26,11 +26,13 @@ final class TestTokens {
   static String sign(String secret, String advertiserClaim, Instant expiresAt) {
     var key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     var encoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
+    // An already expired token must still be issued before it expires, or the encoder refuses it.
+    Instant issuedAt = Instant.now().minusSeconds(5);
+    if (!expiresAt.isAfter(issuedAt)) {
+      issuedAt = expiresAt.minusSeconds(60);
+    }
     JwtClaimsSet.Builder claims =
-        JwtClaimsSet.builder()
-            .subject("test-user")
-            .issuedAt(Instant.now().minusSeconds(5))
-            .expiresAt(expiresAt);
+        JwtClaimsSet.builder().subject("test-user").issuedAt(issuedAt).expiresAt(expiresAt);
     if (advertiserClaim != null) {
       claims.claim("advertiser_id", advertiserClaim);
     }
