@@ -38,11 +38,14 @@ CREATE TABLE campaigns (
     CONSTRAINT campaigns_window CHECK (end_at > start_at),
     CONSTRAINT campaigns_version_positive CHECK (version >= 1),
     CONSTRAINT campaigns_bid_strategy CHECK (
+        -- IS NOT NULL is explicit: a CHECK passes on NULL, so "price > 0" alone lets a missing price in.
         (bid_strategy = 'FIXED_CPM'
+            AND fixed_cpm_micros IS NOT NULL
             AND fixed_cpm_micros > 0 AND fixed_cpm_micros <= max_bid_cpm_micros
             AND target_cpc_micros IS NULL)
         OR
         (bid_strategy = 'TARGET_CPC'
+            AND target_cpc_micros IS NOT NULL
             AND target_cpc_micros > 0
             AND fixed_cpm_micros IS NULL)
     )

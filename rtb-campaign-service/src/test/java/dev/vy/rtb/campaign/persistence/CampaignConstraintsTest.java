@@ -105,6 +105,10 @@ class CampaignConstraintsTest {
             rowWith(
                 "bid_strategy", "TARGET_CPC", "fixed_cpm_micros", null, "target_cpc_micros", 0L)),
         rejected(
+            "target CPC without a price",
+            rowWith(
+                "bid_strategy", "TARGET_CPC", "fixed_cpm_micros", null, "target_cpc_micros", null)),
+        rejected(
             "target CPC with a fixed CPM too",
             rowWith("bid_strategy", "TARGET_CPC", "target_cpc_micros", 5L)));
   }
