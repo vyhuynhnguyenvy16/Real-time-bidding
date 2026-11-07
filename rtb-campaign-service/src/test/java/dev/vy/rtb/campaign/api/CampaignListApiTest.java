@@ -57,7 +57,9 @@ class CampaignListApiTest extends ApiTestBase {
       java.util.List<String> ids = JsonPath.read(body, "$.items[*].id");
       assertThat(ids.size()).isLessThanOrEqualTo(2);
       seen.addAll(ids);
-      cursor = JsonPath.read(body, "$.nextCursor");
+      // The last page has no nextCursor member at all (null members are not serialised).
+      java.util.Map<String, Object> page = JsonPath.read(body, "$");
+      cursor = (String) page.get("nextCursor");
       pages++;
     } while (cursor != null && pages < 10);
 
