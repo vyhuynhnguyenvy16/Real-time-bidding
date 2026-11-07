@@ -75,4 +75,14 @@ public final class Schedule {
   public int allowedHoursCount() {
     return bits.cardinality();
   }
+
+  @Override
+  public boolean equals(Object other) {
+    return other instanceof Schedule that && bits.equals(that.bits);
+  }
+
+  @Override
+  public int hashCode() {
+    return bits.hashCode();
+  }
 }

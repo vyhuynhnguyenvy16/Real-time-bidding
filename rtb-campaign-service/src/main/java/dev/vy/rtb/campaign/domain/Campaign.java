@@ -3,6 +3,7 @@ package dev.vy.rtb.campaign.domain;
 import dev.vy.rtb.common.Money;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -60,6 +61,9 @@ public final class Campaign {
    * Creates a DRAFT campaign, or throws {@link CampaignValidationException} with every violation.
    */
   public static Campaign draft(UUID id, UUID advertiserId, NewCampaign input) {
+    Objects.requireNonNull(id, "id");
+    Objects.requireNonNull(advertiserId, "advertiserId");
+    Objects.requireNonNull(input, "input");
     List<Violation> violations = CampaignValidator.validate(input);
     if (!violations.isEmpty()) {
       throw new CampaignValidationException(violations);

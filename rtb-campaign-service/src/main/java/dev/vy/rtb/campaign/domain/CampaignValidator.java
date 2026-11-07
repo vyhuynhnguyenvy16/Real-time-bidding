@@ -54,14 +54,18 @@ final class CampaignValidator {
       out.add(new Violation("endAt", "must be after startAt"));
     }
 
+    if (in.pacingMode() == null) {
+      out.add(new Violation("pacingMode", "is required"));
+    }
+
     TargetingRules.validate(in.targeting(), out);
     return out;
   }
 
   private static void validateStrategy(NewCampaign in, boolean maxBidOk, List<Violation> out) {
     BidStrategy strategy = in.bidStrategy();
-    if (strategy == null) {
-      out.add(new Violation("bidStrategy", "is required"));
+    if (strategy == null || strategy.type() == null) {
+      out.add(new Violation("bidStrategy", "is required, with a type"));
     } else if (strategy.valueMicros() <= 0) {
       out.add(new Violation("bidStrategy", "price must be greater than 0"));
     } else if (strategy.type() == BidStrategy.Type.FIXED_CPM

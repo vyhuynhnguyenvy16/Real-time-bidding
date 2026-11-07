@@ -23,26 +23,44 @@ final class TargetingRules {
       return;
     }
     for (String country : nullToEmpty(in.countries())) {
-      if (!ISO_ALPHA3_COUNTRIES.contains(country)) {
+      if (country == null || !ISO_ALPHA3_COUNTRIES.contains(country)) {
         out.add(new Violation("targeting.countries", "not an ISO-3166-1 alpha-3 code: " + country));
       }
     }
-    for (int type : nullToEmpty(in.deviceTypes())) {
-      if (type < MIN_DEVICE_TYPE || type > MAX_DEVICE_TYPE) {
+    for (Integer type : nullToEmpty(in.deviceTypes())) {
+      if (type == null || type < MIN_DEVICE_TYPE || type > MAX_DEVICE_TYPE) {
         out.add(new Violation("targeting.deviceTypes", "must be 1-7: " + type));
       }
     }
+    rejectNulls(in.categories(), "targeting.categories", out);
+    rejectNulls(in.publisherBlocklist(), "targeting.publisherBlocklist", out);
     validateSchedule(nullToEmptyMap(in.scheduleHours()), out);
+  }
+
+  private static void rejectNulls(List<String> values, String field, List<Violation> out) {
+    for (String value : nullToEmpty(values)) {
+      if (value == null) {
+        out.add(new Violation(field, "must not contain null"));
+      }
+    }
   }
 
   private static void validateSchedule(Map<String, List<Integer>> hoursByDay, List<Violation> out) {
     for (Map.Entry<String, List<Integer>> entry : hoursByDay.entrySet()) {
-      if (!Schedule.isKnownKey(entry.getKey())) {
+      if (entry.getKey() == null || !Schedule.isKnownKey(entry.getKey())) {
         out.add(new Violation("targeting.scheduleHours", "unknown day key: " + entry.getKey()));
         continue;
       }
-      for (int hour : entry.getValue()) {
-        if (hour < 0 || hour >= Schedule.HOURS_PER_DAY) {
+      List<Integer> hours = entry.getValue();
+      if (hours == null || hours.isEmpty()) {
+        out.add(
+            new Violation(
+                "targeting.scheduleHours",
+                "no hours for " + entry.getKey() + "; a day that never runs"));
+        continue;
+      }
+      for (Integer hour : hours) {
+        if (hour == null || hour < 0 || hour >= Schedule.HOURS_PER_DAY) {
           out.add(new Violation("targeting.scheduleHours", "hour must be 0-23: " + hour));
         }
       }
