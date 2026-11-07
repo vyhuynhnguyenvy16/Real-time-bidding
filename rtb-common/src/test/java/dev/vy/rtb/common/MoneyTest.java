@@ -8,9 +8,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * Seam: the public interface of {@link Money}. Expected values are written as literals
- * (1 USD = 1_000_000 micro-USD, CPM = price per 1000 impressions), never recomputed
- * with the same formula as the implementation.
+ * Seam: the public interface of {@link Money}. Expected values are written as literals (1 USD =
+ * 1_000_000 micro-USD, CPM = price per 1000 impressions), never recomputed with the same formula as
+ * the implementation.
  */
 class MoneyTest {
 
