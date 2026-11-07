@@ -66,7 +66,8 @@ class CampaignRestoreTest {
   void campaignsThatDifferInOneFieldAreNotEqual() {
     Campaign base = Campaign.draft(ID, ADVERTISER_ID, validInput().build());
 
-    assertThat(base).isNotEqualTo(Campaign.draft(ID, ADVERTISER_ID, validInput().name("x").build()));
+    assertThat(base)
+        .isNotEqualTo(Campaign.draft(ID, ADVERTISER_ID, validInput().name("x").build()));
     assertThat(base).isNotEqualTo(base.activate(Instant.parse("2026-11-09T00:00:00Z"), 1));
   }
 }
