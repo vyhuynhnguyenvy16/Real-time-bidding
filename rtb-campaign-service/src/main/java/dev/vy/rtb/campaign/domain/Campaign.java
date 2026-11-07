@@ -25,36 +25,85 @@ public final class Campaign {
   private final Instant endAt;
   private final Targeting targeting;
 
-  private Campaign(UUID id, UUID advertiserId, NewCampaign in, CampaignStatus status) {
+  private Campaign(
+      UUID id,
+      UUID advertiserId,
+      String name,
+      CampaignStatus status,
+      Money dailyBudget,
+      Money totalBudget,
+      Money maxBidCpm,
+      BidStrategy bidStrategy,
+      PacingMode pacingMode,
+      Integer freqCapCount,
+      Instant startAt,
+      Instant endAt,
+      Targeting targeting) {
     this.id = id;
     this.advertiserId = advertiserId;
-    this.name = in.name();
+    this.name = name;
     this.status = status;
-    this.dailyBudget = Money.ofMicros(in.dailyBudgetMicros());
-    this.totalBudget = Money.ofMicros(in.totalBudgetMicros());
-    this.maxBidCpm = Money.ofMicros(in.maxBidCpmMicros());
-    this.bidStrategy = in.bidStrategy();
-    this.pacingMode = in.pacingMode();
-    this.freqCapCount = in.freqCapCount();
-    this.startAt = in.startAt();
-    this.endAt = in.endAt();
-    this.targeting = TargetingRules.normalise(in.targeting());
+    this.dailyBudget = dailyBudget;
+    this.totalBudget = totalBudget;
+    this.maxBidCpm = maxBidCpm;
+    this.bidStrategy = bidStrategy;
+    this.pacingMode = pacingMode;
+    this.freqCapCount = freqCapCount;
+    this.startAt = startAt;
+    this.endAt = endAt;
+    this.targeting = targeting;
   }
 
-  private Campaign(Campaign other, CampaignStatus status) {
-    this.id = other.id;
-    this.advertiserId = other.advertiserId;
-    this.name = other.name;
-    this.status = status;
-    this.dailyBudget = other.dailyBudget;
-    this.totalBudget = other.totalBudget;
-    this.maxBidCpm = other.maxBidCpm;
-    this.bidStrategy = other.bidStrategy;
-    this.pacingMode = other.pacingMode;
-    this.freqCapCount = other.freqCapCount;
-    this.startAt = other.startAt;
-    this.endAt = other.endAt;
-    this.targeting = other.targeting;
+  private Campaign withStatus(CampaignStatus newStatus) {
+    return new Campaign(
+        id,
+        advertiserId,
+        name,
+        newStatus,
+        dailyBudget,
+        totalBudget,
+        maxBidCpm,
+        bidStrategy,
+        pacingMode,
+        freqCapCount,
+        startAt,
+        endAt,
+        targeting);
+  }
+
+  /**
+   * Rebuilds a campaign that was stored earlier, in any status. For the storage layer only: it does
+   * not validate, because the database already holds only rows that passed validation and its own
+   * CHECK constraints. Use {@link #draft} to create a new campaign.
+   */
+  public static Campaign restore(
+      UUID id,
+      UUID advertiserId,
+      String name,
+      CampaignStatus status,
+      Money dailyBudget,
+      Money totalBudget,
+      Money maxBidCpm,
+      BidStrategy bidStrategy,
+      PacingMode pacingMode,
+      Integer freqCapCount,
+      Instant startAt,
+      Instant endAt,
+      Targeting targeting) {
+    return new Campaign(
+        id,
+        advertiserId,
+        name,
+        status,
+        dailyBudget,
+        totalBudget,
+        maxBidCpm,
+        bidStrategy,
+        pacingMode,
+        freqCapCount,
+        startAt,
+        endAt,
+        targeting);
   }
 
   /**
@@ -68,7 +117,20 @@ public final class Campaign {
     if (!violations.isEmpty()) {
       throw new CampaignValidationException(violations);
     }
-    return new Campaign(id, advertiserId, input, CampaignStatus.DRAFT);
+    return new Campaign(
+        id,
+        advertiserId,
+        input.name(),
+        CampaignStatus.DRAFT,
+        Money.ofMicros(input.dailyBudgetMicros()),
+        Money.ofMicros(input.totalBudgetMicros()),
+        Money.ofMicros(input.maxBidCpmMicros()),
+        input.bidStrategy(),
+        input.pacingMode(),
+        input.freqCapCount(),
+        input.startAt(),
+        input.endAt(),
+        TargetingRules.normalise(input.targeting()));
   }
 
   /**
@@ -84,7 +146,7 @@ public final class Campaign {
     if (!endAt.isAfter(now)) {
       throw new InvalidStateException(status, "activate", "endAt is not in the future");
     }
-    return new Campaign(this, CampaignStatus.ACTIVE);
+    return withStatus(CampaignStatus.ACTIVE);
   }
 
   /** ACTIVE to PAUSED; pausing a paused campaign is a no-op. */
@@ -93,7 +155,7 @@ public final class Campaign {
       return this;
     }
     requireStatus("pause", CampaignStatus.ACTIVE);
-    return new Campaign(this, CampaignStatus.PAUSED);
+    return withStatus(CampaignStatus.PAUSED);
   }
 
   /** PAUSED to ACTIVE; resuming an active campaign is a no-op. */
@@ -102,13 +164,13 @@ public final class Campaign {
       return this;
     }
     requireStatus("resume", CampaignStatus.PAUSED);
-    return new Campaign(this, CampaignStatus.ACTIVE);
+    return withStatus(CampaignStatus.ACTIVE);
   }
 
   /** Soft delete from DRAFT, PAUSED or COMPLETED. An ACTIVE campaign must be paused first. */
   public Campaign archive() {
     requireStatus("archive", CampaignStatus.DRAFT, CampaignStatus.PAUSED, CampaignStatus.COMPLETED);
-    return new Campaign(this, CampaignStatus.ARCHIVED);
+    return withStatus(CampaignStatus.ARCHIVED);
   }
 
   /**
@@ -116,7 +178,7 @@ public final class Campaign {
    */
   public Campaign complete() {
     requireStatus("complete", CampaignStatus.ACTIVE);
-    return new Campaign(this, CampaignStatus.COMPLETED);
+    return withStatus(CampaignStatus.COMPLETED);
   }
 
   private void requireStatus(String action, CampaignStatus... allowed) {
@@ -178,5 +240,41 @@ public final class Campaign {
 
   public Targeting targeting() {
     return targeting;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    return other instanceof Campaign that
+        && id.equals(that.id)
+        && advertiserId.equals(that.advertiserId)
+        && Objects.equals(name, that.name)
+        && status == that.status
+        && dailyBudget.equals(that.dailyBudget)
+        && totalBudget.equals(that.totalBudget)
+        && maxBidCpm.equals(that.maxBidCpm)
+        && Objects.equals(bidStrategy, that.bidStrategy)
+        && pacingMode == that.pacingMode
+        && Objects.equals(freqCapCount, that.freqCapCount)
+        && Objects.equals(startAt, that.startAt)
+        && Objects.equals(endAt, that.endAt)
+        && Objects.equals(targeting, that.targeting);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        id,
+        advertiserId,
+        name,
+        status,
+        dailyBudget,
+        totalBudget,
+        maxBidCpm,
+        bidStrategy,
+        pacingMode,
+        freqCapCount,
+        startAt,
+        endAt,
+        targeting);
   }
 }
