@@ -47,7 +47,7 @@ class CampaignPatchApiTest extends ApiTestBase {
         .build();
   }
 
-  private ResultActions patch(UUID advertiser, UUID id, String ifMatch, String body)
+  private ResultActions patchCampaign(UUID advertiser, UUID id, String ifMatch, String body)
       throws Exception {
     var request =
         patch("/api/v1/campaigns/" + id)
@@ -65,7 +65,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"name\": \"Tên mới\"}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"name\": \"Tên mới\"}")
         .andExpect(status().isOk())
         .andExpect(header().string(ETAG, "\"2\""))
         .andExpect(jsonPath("$.name").value("Tên mới"))
@@ -80,7 +80,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"targeting\": {\"countries\": [\"USA\"]}}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"targeting\": {\"countries\": [\"USA\"]}}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.targeting.countries[0]").value("USA"))
         .andExpect(jsonPath("$.targeting.deviceTypes.length()").value(3))
@@ -92,7 +92,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"freqCapCount\": null}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"freqCapCount\": null}")
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.freqCapCount").doesNotExist());
   }
@@ -102,7 +102,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "1", "{\"name\": \"x\"}").andExpect(status().isOk());
+    patchCampaign(advertiser, id, "1", "{\"name\": \"x\"}").andExpect(status().isOk());
   }
 
   @Test
@@ -110,7 +110,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, null, "{\"name\": \"x\"}")
+    patchCampaign(advertiser, id, null, "{\"name\": \"x\"}")
         .andExpect(status().isPreconditionRequired())
         .andExpect(jsonPath("$.code").value("PRECONDITION_REQUIRED"));
   }
@@ -119,9 +119,9 @@ class CampaignPatchApiTest extends ApiTestBase {
   void aStaleIfMatchIsAVersionConflictAndChangesNothing() throws Exception {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
-    patch(advertiser, id, "\"1\"", "{\"name\": \"first\"}").andExpect(status().isOk());
+    patchCampaign(advertiser, id, "\"1\"", "{\"name\": \"first\"}").andExpect(status().isOk());
 
-    patch(advertiser, id, "\"1\"", "{\"name\": \"second\"}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"name\": \"second\"}")
         .andExpect(status().isPreconditionFailed())
         .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
 
@@ -133,7 +133,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"abc\"", "{\"name\": \"x\"}")
+    patchCampaign(advertiser, id, "\"abc\"", "{\"name\": \"x\"}")
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].field").value("If-Match"));
   }
@@ -143,7 +143,11 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"status\": \"ACTIVE\", \"version\": 7, \"colour\": \"red\"}")
+    patchCampaign(
+            advertiser,
+            id,
+            "\"1\"",
+            "{\"status\": \"ACTIVE\", \"version\": 7, \"colour\": \"red\"}")
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
         .andExpect(jsonPath("$.errors[?(@.field == 'status')]").exists())
@@ -156,7 +160,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"dailyBudgetMicros\": 0}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"dailyBudgetMicros\": 0}")
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[?(@.field == 'dailyBudgetMicros')]").exists());
 
@@ -168,7 +172,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID advertiser = givenAdvertiser();
     UUID id = givenCampaign(advertiser, input()).value().id();
 
-    patch(advertiser, id, "\"1\"", "{\"dailyBudgetMicros\": \"lots\"}")
+    patchCampaign(advertiser, id, "\"1\"", "{\"dailyBudgetMicros\": \"lots\"}")
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }
@@ -179,7 +183,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     var stored = givenCampaign(advertiser, input());
     repository.update(stored, stored.value().archive());
 
-    patch(advertiser, stored.value().id(), "\"2\"", "{\"name\": \"x\"}")
+    patchCampaign(advertiser, stored.value().id(), "\"2\"", "{\"name\": \"x\"}")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("INVALID_STATE"));
   }
@@ -190,7 +194,7 @@ class CampaignPatchApiTest extends ApiTestBase {
     UUID other = givenAdvertiser();
     UUID id = givenCampaign(other, input()).value().id();
 
-    patch(mine, id, "\"1\"", "{\"name\": \"x\"}")
+    patchCampaign(mine, id, "\"1\"", "{\"name\": \"x\"}")
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("NOT_FOUND"));
   }
