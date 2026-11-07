@@ -68,6 +68,32 @@ public final class Schedule {
     return (day.getValue() - 1) * HOURS_PER_DAY + hour;
   }
 
+  /** The 168 bits as text ("0"/"1", index 0 first), the form PostgreSQL uses for bit(168). */
+  public String toBitString() {
+    StringBuilder text = new StringBuilder(HOURS_PER_WEEK);
+    for (int i = 0; i < HOURS_PER_WEEK; i++) {
+      text.append(bits.get(i) ? '1' : '0');
+    }
+    return text.toString();
+  }
+
+  /** Reads the text form written by {@link #toBitString()}. */
+  public static Schedule fromBitString(String text) {
+    if (text == null || text.length() != HOURS_PER_WEEK) {
+      throw new IllegalArgumentException("A schedule mask has exactly " + HOURS_PER_WEEK + " bits");
+    }
+    BitSet bits = new BitSet(HOURS_PER_WEEK);
+    for (int i = 0; i < HOURS_PER_WEEK; i++) {
+      char c = text.charAt(i);
+      if (c == '1') {
+        bits.set(i);
+      } else if (c != '0') {
+        throw new IllegalArgumentException("A schedule mask holds only 0 and 1, found: " + c);
+      }
+    }
+    return new Schedule(bits);
+  }
+
   public boolean allows(DayOfWeek day, int hour) {
     return bits.get(index(day, hour));
   }
