@@ -30,7 +30,7 @@ abstract class ApiTestBase {
 
   @BeforeEach
   void emptyTables() {
-    jdbc.sql("TRUNCATE campaign_targeting, campaigns, advertisers CASCADE").update();
+    jdbc.sql("TRUNCATE creatives, campaign_targeting, campaigns, advertisers CASCADE").update();
   }
 
   protected UUID givenAdvertiser() {
