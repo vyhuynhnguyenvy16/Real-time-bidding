@@ -14,7 +14,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Real application, real PostgreSQL, real security chain; only the HTTP server is replaced. */
-@SpringBootTest(properties = "rtb.security.jwt-secret=" + TestTokens.SECRET)
+@SpringBootTest(
+    properties = {
+      "rtb.security.jwt-secret=" + TestTokens.SECRET,
+      // application.yaml has no default for the password; the test container supplies the real one.
+      "DB_PASSWORD=unused-in-tests"
+    })
 @AutoConfigureMockMvc
 @Import(PostgresContainerConfig.class)
 abstract class ApiTestBase {

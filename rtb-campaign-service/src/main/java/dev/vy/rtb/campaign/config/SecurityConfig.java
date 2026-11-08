@@ -8,6 +8,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -43,14 +44,16 @@ class SecurityConfig {
                 oauth
                     .jwt(Customizer.withDefaults())
                     .authenticationEntryPoint(
-                        (request, response, e) ->
-                            problems.write(
-                                request,
-                                response,
-                                HttpStatus.UNAUTHORIZED.value(),
-                                "UNAUTHENTICATED",
-                                "Authentication required",
-                                "Missing, invalid or expired access token")))
+                        (request, response, e) -> {
+                          response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer"); // RFC 6750
+                          problems.write(
+                              request,
+                              response,
+                              HttpStatus.UNAUTHORIZED.value(),
+                              "UNAUTHENTICATED",
+                              "Authentication required",
+                              "Missing, invalid or expired access token");
+                        }))
         .exceptionHandling(
             ex ->
                 ex.accessDeniedHandler(

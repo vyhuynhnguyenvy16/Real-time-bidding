@@ -36,6 +36,7 @@ class CampaignController {
 
   static final int DEFAULT_LIMIT = 50;
   static final int MAX_LIMIT = 200;
+  static final int MAX_TRANSITION_ATTEMPTS = 3;
   static final String MERGE_PATCH = "application/merge-patch+json";
 
   private final CampaignRepository campaigns;
@@ -91,13 +92,18 @@ class CampaignController {
       @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
       @RequestBody Map<String, Object> patch,
       @AuthenticationPrincipal Jwt jwt) {
-    long expectedVersion = parseIfMatch(ifMatch);
+    // Look the campaign up first so another tenant's id is a 404 whatever headers were sent.
     Stored<Campaign> stored = find(advertiserOf(jwt), id);
+    long expectedVersion = parseIfMatch(ifMatch);
     if (expectedVersion != stored.version()) {
       throw new VersionConflictException(id, expectedVersion);
     }
+    Campaign revised = patcher.apply(stored.value(), patch);
+    if (revised.equals(stored.value())) {
+      return ok(stored); // nothing changed: no write, no new version
+    }
     // A change that lands between the read above and the write makes update() throw the same.
-    return ok(campaigns.update(stored, patcher.apply(stored.value(), patch)));
+    return ok(campaigns.update(stored, revised));
   }
 
   @PostMapping("/{id}/activate")
@@ -130,12 +136,26 @@ class CampaignController {
     return campaigns.findById(advertiser, id).orElseThrow(CampaignNotFoundException::new);
   }
 
-  /** A transition that changes nothing (pause on a paused campaign) is not written. */
+  /**
+   * A transition that changes nothing (pause on a paused campaign) is not written. The caller sent
+   * no If-Match, so when someone else changes the campaign in between, read again and retry.
+   */
   private ResponseEntity<CampaignResponse> transition(
       UUID advertiser, UUID id, Function<Campaign, Campaign> action) {
-    Stored<Campaign> stored = find(advertiser, id);
-    Campaign changed = action.apply(stored.value());
-    return ok(changed == stored.value() ? stored : campaigns.update(stored, changed));
+    for (int attempt = 1; ; attempt++) {
+      Stored<Campaign> stored = find(advertiser, id);
+      Campaign changed = action.apply(stored.value());
+      if (changed == stored.value()) {
+        return ok(stored);
+      }
+      try {
+        return ok(campaigns.update(stored, changed));
+      } catch (VersionConflictException e) {
+        if (attempt >= MAX_TRANSITION_ATTEMPTS) {
+          throw e;
+        }
+      }
+    }
   }
 
   private static ResponseEntity<CampaignResponse> ok(Stored<Campaign> stored) {
