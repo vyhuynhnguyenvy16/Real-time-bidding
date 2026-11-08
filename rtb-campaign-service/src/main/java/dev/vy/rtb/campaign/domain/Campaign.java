@@ -117,11 +117,17 @@ public final class Campaign {
     if (!violations.isEmpty()) {
       throw new CampaignValidationException(violations);
     }
+    return fromInput(id, advertiserId, input, CampaignStatus.DRAFT);
+  }
+
+  /** Builds a campaign from validated input; shared by {@link #draft} and {@link #revise}. */
+  private static Campaign fromInput(
+      UUID id, UUID advertiserId, NewCampaign input, CampaignStatus status) {
     return new Campaign(
         id,
         advertiserId,
         input.name(),
-        CampaignStatus.DRAFT,
+        status,
         Money.ofMicros(input.dailyBudgetMicros()),
         Money.ofMicros(input.totalBudgetMicros()),
         Money.ofMicros(input.maxBidCpmMicros()),
@@ -147,6 +153,19 @@ public final class Campaign {
       throw new InvalidStateException(status, "activate", "endAt is not in the future");
     }
     return withStatus(CampaignStatus.ACTIVE);
+  }
+
+  /**
+   * Replaces everything the advertiser can edit; id, advertiser and status stay. The result is
+   * validated like a new campaign. A COMPLETED or ARCHIVED campaign can no longer be edited.
+   */
+  public Campaign revise(NewCampaign edited) {
+    requireStatus("edit", CampaignStatus.DRAFT, CampaignStatus.ACTIVE, CampaignStatus.PAUSED);
+    List<Violation> violations = CampaignValidator.validate(edited);
+    if (!violations.isEmpty()) {
+      throw new CampaignValidationException(violations);
+    }
+    return fromInput(id, advertiserId, edited, status);
   }
 
   /** ACTIVE to PAUSED; pausing a paused campaign is a no-op. */
