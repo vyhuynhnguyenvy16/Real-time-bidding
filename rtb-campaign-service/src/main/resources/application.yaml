@@ -10,6 +10,9 @@ spring:
     password: ${DB_PASSWORD}
   jackson:
     default-property-inclusion: non_null
+    deserialization:
+      # Money must never be cut silently: 100000000.9 is a 400, not 100000000.
+      accept-float-as-int: false
 
 server:
   port: ${PORT:8080}
