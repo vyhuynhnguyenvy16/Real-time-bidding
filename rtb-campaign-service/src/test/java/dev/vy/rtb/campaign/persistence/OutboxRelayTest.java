@@ -76,9 +76,9 @@ class OutboxRelayTest {
     store.append(B, "{\"n\":2}");
     store.append(A, "{\"n\":3}");
 
-    int sent = relay(producer, 100).runOnce();
+    int count = relay(producer, 100).runOnce();
 
-    assertThat(sent).isEqualTo(3);
+    assertThat(count).isEqualTo(3);
     List<ProducerRecord<String, String>> history = sent;
     assertThat(history)
         .extracting(ProducerRecord::key)
