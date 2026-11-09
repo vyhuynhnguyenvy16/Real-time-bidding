@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
@@ -32,8 +33,6 @@ import org.testcontainers.kafka.KafkaContainer;
 class OutboxRelayKafkaTest {
 
   private static final String TOPIC = "campaign-updates";
-  private static final UUID A = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-  private static final UUID B = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
   private static KafkaContainer kafka;
 
@@ -70,7 +69,8 @@ class OutboxRelayKafkaTest {
             100);
   }
 
-  private List<ConsumerRecord<String, String>> readAll(int expected) {
+  /** Records of the given campaigns only: the topic is shared by every test of this class. */
+  private List<ConsumerRecord<String, String>> readAll(Set<String> keys, int expected) {
     try (KafkaConsumer<String, String> consumer =
         new KafkaConsumer<>(
             Map.of(
@@ -88,7 +88,14 @@ class OutboxRelayKafkaTest {
       List<ConsumerRecord<String, String>> all = new ArrayList<>();
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
       while (all.size() < expected && System.nanoTime() < deadline) {
-        consumer.poll(Duration.ofMillis(500)).forEach(all::add);
+        consumer
+            .poll(Duration.ofMillis(500))
+            .forEach(
+                r -> {
+                  if (keys.contains(r.key())) {
+                    all.add(r);
+                  }
+                });
       }
       return all;
     }
@@ -112,19 +119,21 @@ class OutboxRelayKafkaTest {
 
   @Test
   void eventsArriveKeyedByCampaignInWriteOrderAndATombstoneIsANullValue() {
-    store.append(A, "{\"v\":1}");
-    store.append(B, "{\"v\":1}");
-    store.append(A, "{\"v\":2}");
-    store.append(B, null);
+    UUID a = UUID.randomUUID();
+    UUID b = UUID.randomUUID();
+    store.append(a, "{\"v\":1}");
+    store.append(b, "{\"v\":1}");
+    store.append(a, "{\"v\":2}");
+    store.append(b, null);
 
     assertThat(relay.runOnce()).isEqualTo(4);
 
-    List<ConsumerRecord<String, String>> read = readAll(4);
+    List<ConsumerRecord<String, String>> read = readAll(Set.of(a.toString(), b.toString()), 4);
     assertThat(read).hasSize(4);
-    assertThat(read.stream().filter(r -> r.key().equals(A.toString())).map(ConsumerRecord::value))
+    assertThat(read.stream().filter(r -> r.key().equals(a.toString())).map(ConsumerRecord::value))
         .containsExactly("{\"v\":1}", "{\"v\":2}");
     List<String> forB =
-        read.stream().filter(r -> r.key().equals(B.toString())).map(ConsumerRecord::value).toList();
+        read.stream().filter(r -> r.key().equals(b.toString())).map(ConsumerRecord::value).toList();
     assertThat(forB).hasSize(2);
     assertThat(forB.get(0)).isEqualTo("{\"v\":1}");
     assertThat(forB.get(1)).isNull();
@@ -132,7 +141,7 @@ class OutboxRelayKafkaTest {
 
   @Test
   void aSecondRunHasNothingLeftToSend() {
-    store.append(A, "{\"v\":1}");
+    store.append(UUID.randomUUID(), "{\"v\":1}");
 
     assertThat(relay.runOnce()).isEqualTo(1);
     assertThat(relay.runOnce()).isZero();
