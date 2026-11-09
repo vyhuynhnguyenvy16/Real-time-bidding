@@ -50,8 +50,11 @@ public final class JdbcCreativeRepository implements CreativeRepository {
               .listOfRows();
           int held =
               jdbc.sql(
-                      "SELECT count(*) FROM creatives WHERE campaign_id = :c AND status <>"
-                          + " 'ARCHIVED'")
+                      """
+                      SELECT count(*) FROM creatives
+                      WHERE advertiser_id = :a AND campaign_id = :c AND status <> 'ARCHIVED'
+                      """)
+                  .param("a", c.advertiserId())
                   .param("c", c.campaignId())
                   .query(Integer.class)
                   .single();

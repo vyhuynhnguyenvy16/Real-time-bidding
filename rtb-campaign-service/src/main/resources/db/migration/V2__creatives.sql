@@ -26,13 +26,17 @@ CREATE TABLE creatives (
     CONSTRAINT creatives_status CHECK (status IN ('ACTIVE', 'PAUSED', 'ARCHIVED')),
     CONSTRAINT creatives_version_positive CHECK (version >= 1),
     CONSTRAINT creatives_markup_size CHECK (octet_length(markup) BETWEEN 1 AND 20480),
-    -- \y is a word boundary; ~* is case-insensitive. Same patterns as CreativeValidator.
+    -- Same patterns, with the same ASCII classes, as CreativeValidator (CreativeParityTest keeps
+    -- the two in step). ~* is case-insensitive. [ \t\n\r\f\v] is space, tab, LF, CR, FF, VT.
     CONSTRAINT creatives_markup_safe CHECK (
-        markup !~* '<\s*/?\s*(script|iframe|object|embed)\y'
-        AND markup !~* 'javascript\s*:'
-        AND markup !~* '[\s"''/]on[a-z]+\s*='),
+        markup !~* '<[ \t\n\r\f\v/]*(script|iframe|object|embed|base|meta|form|link|style|svg|math|frame|applet|template)'
+        AND markup !~* 'j[ \t\n\r\f\v]*a[ \t\n\r\f\v]*v[ \t\n\r\f\v]*a[ \t\n\r\f\v]*s[ \t\n\r\f\v]*c[ \t\n\r\f\v]*r[ \t\n\r\f\v]*i[ \t\n\r\f\v]*p[ \t\n\r\f\v]*t[ \t\n\r\f\v]*:'
+        AND markup !~* '&(#|(colon|tab|newline|lpar|rpar|sol|bsol);)'
+        AND markup !~* '[ \t\n\r\f\v"''/]on[a-z]+[ \t\n\r\f\v]*='
+        AND markup !~ '\$\{(?!(AUCTION_PRICE|CLICK_URL)\})'),
+    -- https, at most 512 characters (it travels inside the click token), no user:password@.
     CONSTRAINT creatives_landing_url CHECK (
-        char_length(landing_url) <= 2048 AND landing_url ~ '^https://[^/?#[:space:]]+')
+        char_length(landing_url) <= 512 AND landing_url ~ '^https://[^/?#@[:space:]]+([/?#]|$)')
 );
 
 CREATE INDEX creatives_campaign_created ON creatives (campaign_id, created_at, id);

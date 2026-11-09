@@ -365,4 +365,76 @@ class CreativeApiTest extends ApiTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("ACTIVE"));
   }
+
+  // --- review findings: the invariant "an ACTIVE campaign has an active creative" ---------------
+
+  private ResultActions campaignAction(UUID advertiser, UUID campaign, String action)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/campaigns/" + campaign + "/" + action)
+            .header(AUTHORIZATION, bearer(advertiser)));
+  }
+
+  @Test
+  void aPausedCampaignCannotBeResumedWithoutAnActiveCreative() throws Exception {
+    UUID advertiser = givenAdvertiser();
+    UUID campaign = givenActiveCampaignWithCreatives(advertiser, 1);
+    UUID only = creatives.listByCampaign(advertiser, campaign).get(0).value().id();
+
+    campaignAction(advertiser, campaign, "pause").andExpect(status().isOk());
+    // The campaign is paused, so the last creative may go ...
+    action(advertiser, campaign, only, "pause").andExpect(status().isOk());
+    // ... but the campaign cannot come back without one.
+    campaignAction(advertiser, campaign, "resume")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_STATE"));
+    action(advertiser, campaign, only, "resume").andExpect(status().isOk());
+    campaignAction(advertiser, campaign, "resume")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("ACTIVE"));
+  }
+
+  @Test
+  void onlyPausedCreativesDoNotLetACampaignActivate() throws Exception {
+    UUID advertiser = givenAdvertiser();
+    UUID campaign = givenDraftCampaign(advertiser);
+    UUID creative = givenCreative(advertiser, campaign);
+    action(advertiser, campaign, creative, "pause").andExpect(status().isOk());
+
+    campaignAction(advertiser, campaign, "activate").andExpect(status().isConflict());
+  }
+
+  @Test
+  void aFinishedCampaignTakesNoNewOrEditedOrRevivedCreatives() throws Exception {
+    UUID advertiser = givenAdvertiser();
+    UUID campaign = givenDraftCampaign(advertiser);
+    UUID creative = givenCreative(advertiser, campaign);
+    action(advertiser, campaign, creative, "pause").andExpect(status().isOk());
+    campaignAction(advertiser, campaign, "archive").andExpect(status().isOk());
+
+    create(advertiser, campaign, VALID)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVALID_STATE"));
+    patchCreative(advertiser, campaign, creative, "\"2\"", "{\"name\": \"x\"}")
+        .andExpect(status().isConflict());
+    action(advertiser, campaign, creative, "resume").andExpect(status().isConflict());
+    // Cleaning up is still allowed.
+    action(advertiser, campaign, creative, "archive").andExpect(status().isOk());
+  }
+
+  @Test
+  void landingUrlsWithCredentialsAndNulCharactersAre400NotAnError() throws Exception {
+    UUID advertiser = givenAdvertiser();
+    UUID campaign = givenDraftCampaign(advertiser);
+
+    create(
+            advertiser,
+            campaign,
+            VALID.replace("https://example.com/landing", "https://google.com@evil.example/"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].field").value("landingUrl"));
+    create(advertiser, campaign, VALID.replace("Banner A", "a\\u0000b"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].field").value("name"));
+  }
 }

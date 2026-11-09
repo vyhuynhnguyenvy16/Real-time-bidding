@@ -4,6 +4,7 @@ import dev.vy.rtb.campaign.domain.Campaign;
 import dev.vy.rtb.campaign.domain.CampaignStatus;
 import dev.vy.rtb.campaign.domain.Creative;
 import dev.vy.rtb.campaign.domain.CreativeStatus;
+import dev.vy.rtb.campaign.domain.InvalidStateException;
 import dev.vy.rtb.campaign.persistence.CampaignRepository;
 import dev.vy.rtb.campaign.persistence.CreativeRepository;
 import dev.vy.rtb.campaign.persistence.Stored;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,12 +39,17 @@ class CreativeController {
   private final CampaignRepository campaigns;
   private final CreativeRepository creatives;
   private final CreativePatcher patcher;
+  private final TransactionOperations transactions;
 
   CreativeController(
-      CampaignRepository campaigns, CreativeRepository creatives, CreativePatcher patcher) {
+      CampaignRepository campaigns,
+      CreativeRepository creatives,
+      CreativePatcher patcher,
+      TransactionOperations transactions) {
     this.campaigns = campaigns;
     this.creatives = creatives;
     this.patcher = patcher;
+    this.transactions = transactions;
   }
 
   @PostMapping
@@ -51,7 +58,7 @@ class CreativeController {
       @RequestBody CreativeRequest body,
       @AuthenticationPrincipal Jwt jwt) {
     UUID advertiser = CampaignController.advertiserOf(jwt);
-    requireCampaign(advertiser, campaignId);
+    requireOpen(requireCampaign(advertiser, campaignId));
     Creative creative =
         Creative.create(UUID.randomUUID(), campaignId, advertiser, body.toNewCreative());
     Stored<Creative> stored = creatives.insert(creative);
@@ -89,7 +96,7 @@ class CreativeController {
       @RequestBody Map<String, Object> patch,
       @AuthenticationPrincipal Jwt jwt) {
     UUID advertiser = CampaignController.advertiserOf(jwt);
-    requireCampaign(advertiser, campaignId);
+    requireOpen(requireCampaign(advertiser, campaignId));
     Stored<Creative> stored = find(advertiser, campaignId, id);
     long expected = CampaignController.parseIfMatch(ifMatch);
     if (expected != stored.version()) {
@@ -105,19 +112,19 @@ class CreativeController {
   @PostMapping("/{id}/pause")
   ResponseEntity<CreativeResponse> pause(
       @PathVariable UUID campaignId, @PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-    return transition(jwt, campaignId, id, Creative::pause);
+    return transition(jwt, campaignId, id, false, Creative::pause);
   }
 
   @PostMapping("/{id}/resume")
   ResponseEntity<CreativeResponse> resume(
       @PathVariable UUID campaignId, @PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-    return transition(jwt, campaignId, id, Creative::resume);
+    return transition(jwt, campaignId, id, true, Creative::resume);
   }
 
   @PostMapping("/{id}/archive")
   ResponseEntity<CreativeResponse> archive(
       @PathVariable UUID campaignId, @PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-    return transition(jwt, campaignId, id, Creative::archive);
+    return transition(jwt, campaignId, id, false, Creative::archive);
   }
 
   // --- helpers --------------------------------------------------------------------------------
@@ -132,36 +139,63 @@ class CreativeController {
         .orElseThrow(CreativeNotFoundException::new);
   }
 
+  /** A creative cannot be added to, edited on or brought back on a finished campaign. */
+  private static void requireOpen(Stored<Campaign> campaign) {
+    CampaignStatus status = campaign.value().status();
+    if (status == CampaignStatus.ARCHIVED || status == CampaignStatus.COMPLETED) {
+      throw new InvalidStateException(
+          status, "change the creatives of", "the campaign is finished");
+    }
+  }
+
   /**
-   * No If-Match is sent, so when someone else changes the creative in between, read again and
-   * retry. Taking the last active creative away from an ACTIVE campaign is refused (brief Q4); two
-   * requests racing for the last two creatives can still slip through, which the bidder tolerates.
+   * The campaign row is locked for the whole transition, the same lock activate and resume take, so
+   * "an ACTIVE campaign always has an active creative" cannot be broken by two requests crossing.
+   * Taking the last active creative away from an ACTIVE campaign is refused (brief Q4). No If-Match
+   * is sent, so when an unlocked edit lands in between, read again and retry.
    */
   private ResponseEntity<CreativeResponse> transition(
-      Jwt jwt, UUID campaignId, UUID id, Function<Creative, Creative> action) {
+      Jwt jwt,
+      UUID campaignId,
+      UUID id,
+      boolean needsOpenCampaign,
+      Function<Creative, Creative> action) {
     UUID advertiser = CampaignController.advertiserOf(jwt);
     for (int attempt = 1; ; attempt++) {
-      Stored<Campaign> campaign = requireCampaign(advertiser, campaignId);
-      Stored<Creative> stored = find(advertiser, campaignId, id);
-      Creative changed = action.apply(stored.value());
-      if (changed == stored.value()) {
-        return ok(stored);
-      }
-      boolean leavesActive =
-          stored.value().status() == CreativeStatus.ACTIVE
-              && changed.status() != CreativeStatus.ACTIVE;
-      if (leavesActive
-          && campaign.value().status() == CampaignStatus.ACTIVE
-          && creatives.countActive(advertiser, campaignId) <= 1) {
-        throw new LastActiveCreativeException();
-      }
       try {
-        return ok(creatives.update(stored, changed));
+        return transactions.execute(
+            tx -> {
+              Stored<Campaign> campaign =
+                  campaigns
+                      .findByIdForUpdate(advertiser, campaignId)
+                      .orElseThrow(CampaignNotFoundException::new);
+              Stored<Creative> stored = find(advertiser, campaignId, id);
+              if (needsOpenCampaign) {
+                requireOpen(campaign);
+              }
+              Creative changed = action.apply(stored.value());
+              if (changed == stored.value()) {
+                return ok(stored);
+              }
+              requireAnotherActive(advertiser, campaign.value(), stored.value(), changed);
+              return ok(creatives.update(stored, changed));
+            });
       } catch (VersionConflictException e) {
         if (attempt >= CampaignController.MAX_TRANSITION_ATTEMPTS) {
           throw e;
         }
       }
+    }
+  }
+
+  private void requireAnotherActive(
+      UUID advertiser, Campaign campaign, Creative before, Creative after) {
+    boolean leavesActive =
+        before.status() == CreativeStatus.ACTIVE && after.status() != CreativeStatus.ACTIVE;
+    if (leavesActive
+        && campaign.status() == CampaignStatus.ACTIVE
+        && creatives.countActive(advertiser, campaign.id()) <= 1) {
+      throw new LastActiveCreativeException();
     }
   }
 

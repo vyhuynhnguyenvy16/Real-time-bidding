@@ -3,7 +3,9 @@ package dev.vy.rtb.campaign.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -61,6 +63,28 @@ class CreativeTest {
         Arguments.of("markup", valid().markup("<img src=x onerror=alert(1)>").build()),
         Arguments.of("markup", valid().markup("<div onClick = \"x()\">y</div>").build()),
         Arguments.of("markup", valid().markup("<img src=\"https://a.b/${USER_ID}\">").build()),
+        Arguments.of("markup", valid().markup("<a href=\"java\tscript:alert(1)\">x</a>").build()),
+        Arguments.of("markup", valid().markup("<a href=\"java\nscript:alert(1)\">x</a>").build()),
+        Arguments.of(
+            "markup", valid().markup("<a href=\"&#106;avascript:alert(1)\">x</a>").build()),
+        Arguments.of(
+            "markup", valid().markup("<a href=\"javascript&colon;alert(1)\">x</a>").build()),
+        Arguments.of("markup", valid().markup("<base href=\"//evil.example/\">").build()),
+        Arguments.of(
+            "markup", valid().markup("<meta http-equiv=refresh content=\"0;url=x\">").build()),
+        Arguments.of("markup", valid().markup("<form action=\"https://evil.example\">").build()),
+        Arguments.of("markup", valid().markup("<style>body{display:none}</style>").build()),
+        Arguments.of("markup", valid().markup("<svg onload=alert(1)>").build()),
+        Arguments.of("markup", valid().markup("<img src=\"https://a.b/${AUCTION_PRICE\">").build()),
+        Arguments.of("markup", valid().markup("<p>a\u0000b</p>").build()),
+        Arguments.of("markup", valid().markup("<p>\ud800</p>").build()),
+        Arguments.of("name", valid().name("a\u0000b").build()),
+        Arguments.of("name", valid().name("\udc00").build()),
+        Arguments.of("landingUrl", valid().landingUrl("https://example.com/\u0000").build()),
+        Arguments.of("landingUrl", valid().landingUrl("https://google.com@evil.example/").build()),
+        Arguments.of("landingUrl", valid().landingUrl("https://user:pw@example.com/").build()),
+        Arguments.of(
+            "landingUrl", valid().landingUrl("https://example.com/" + "a".repeat(493)).build()),
         Arguments.of("landingUrl", valid().landingUrl("http://example.com").build()),
         Arguments.of("landingUrl", valid().landingUrl("javascript:alert(1)").build()),
         Arguments.of("landingUrl", valid().landingUrl("not a url").build()),
@@ -112,10 +136,41 @@ class CreativeTest {
         valid()
             .name("a".repeat(120))
             .markup("x".repeat(20 * 1024 - 30) + "${AUCTION_PRICE}${CLICK_URL}")
-            .landingUrl("https://example.com/" + "a".repeat(2048 - 20))
+            .landingUrl("https://example.com/" + "a".repeat(512 - 20))
             .build();
 
     assertThatCode(() -> draft(input)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void aNameIsStrippedAndCountedInCodePointsLikeTheDatabaseDoes() {
+    // 100 emoji are 200 UTF-16 units but 100 characters; padding is not part of the name.
+    assertThatCode(() -> draft(valid().name("😀".repeat(100)).build())).doesNotThrowAnyException();
+    assertThatCode(() -> draft(valid().name("  " + "a".repeat(120) + "  ").build()))
+        .doesNotThrowAnyException();
+    assertThat(draft(valid().name("  padded  ").build()).name()).isEqualTo("padded");
+  }
+
+  @Test
+  void hostileInputIsRejectedQuicklyNotAfterQuadraticBacktracking() {
+    String[] hostile = {
+      "<" + " ".repeat(20_000) + "x",
+      "${".repeat(10_000),
+      " on" + "a".repeat(20_000),
+      "j" + " ".repeat(20_000),
+      "<" + " ".repeat(300_000), // far over the size limit: must not even reach the patterns
+    };
+    for (String markup : hostile) {
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(2),
+          () -> {
+            try {
+              draft(valid().markup(markup).build());
+            } catch (CampaignValidationException expected) {
+              // rejection is fine; only the time matters here
+            }
+          });
+    }
   }
 
   @Test

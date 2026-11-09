@@ -100,6 +100,20 @@ class CreativeConstraintsTest {
         Arguments.of("iframe tag", rowWith("markup", "<iframe src=x>")),
         Arguments.of("javascript url", rowWith("markup", "<a href=\"JavaScript:x\">")),
         Arguments.of("event handler", rowWith("markup", "<img src=x onerror=y>")),
+        Arguments.of("tab inside javascript", rowWith("markup", "<a href=\"java\tscript:x\">")),
+        Arguments.of("numeric entity", rowWith("markup", "<a href=\"&#106;avascript:x\">")),
+        Arguments.of("colon entity", rowWith("markup", "<a href=\"javascript&colon;x\">")),
+        Arguments.of("base tag", rowWith("markup", "<base href=//evil>")),
+        Arguments.of("form tag", rowWith("markup", "<form action=x>")),
+        Arguments.of("style tag", rowWith("markup", "<style>a{}</style>")),
+        Arguments.of("svg tag", rowWith("markup", "<svg onload=x>")),
+        Arguments.of("unknown macro", rowWith("markup", "<img src=\"https://a.b/${USER_ID}\">")),
+        Arguments.of(
+            "unclosed macro", rowWith("markup", "<img src=\"https://a.b/${AUCTION_PRICE\">")),
+        Arguments.of(
+            "credentials in landing url", rowWith("landing_url", "https://u:p@example.com/")),
+        Arguments.of(
+            "landing url over 512", rowWith("landing_url", "https://a.com/" + "a".repeat(500))),
         Arguments.of("http landing url", rowWith("landing_url", "http://example.com")),
         Arguments.of("landing url without host", rowWith("landing_url", "https://")),
         Arguments.of(

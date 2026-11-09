@@ -177,12 +177,18 @@ public final class Campaign {
     return withStatus(CampaignStatus.PAUSED);
   }
 
-  /** PAUSED to ACTIVE; resuming an active campaign is a no-op. */
-  public Campaign resume() {
+  /**
+   * PAUSED to ACTIVE; resuming an active campaign is a no-op. Like {@link #activate}, it needs at
+   * least one active creative, otherwise an ACTIVE campaign would have nothing to bid with.
+   */
+  public Campaign resume(int activeCreativeCount) {
     if (status == CampaignStatus.ACTIVE) {
       return this;
     }
     requireStatus("resume", CampaignStatus.PAUSED);
+    if (activeCreativeCount < 1) {
+      throw new InvalidStateException(status, "resume", "at least one active creative is required");
+    }
     return withStatus(CampaignStatus.ACTIVE);
   }
 

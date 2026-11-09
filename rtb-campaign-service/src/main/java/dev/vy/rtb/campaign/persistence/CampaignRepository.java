@@ -17,6 +17,13 @@ public interface CampaignRepository {
   Optional<Stored<Campaign>> findById(UUID advertiserId, UUID campaignId);
 
   /**
+   * Like {@link #findById} but locks the campaign row until the surrounding transaction ends, so a
+   * check that depends on other tables (creatives) and the write that follows cannot interleave
+   * with another such check. Call it inside a transaction.
+   */
+  Optional<Stored<Campaign>> findByIdForUpdate(UUID advertiserId, UUID campaignId);
+
+  /**
    * Replaces the stored campaign with {@code changed} if the row is still at {@code
    * current.version()}; the new version is {@code current.version() + 1}.
    *
