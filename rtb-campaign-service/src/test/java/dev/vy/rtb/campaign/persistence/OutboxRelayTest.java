@@ -2,18 +2,22 @@ package dev.vy.rtb.campaign.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.vy.rtb.campaign.outbox.OutboxRelay;
 import dev.vy.rtb.campaign.outbox.OutboxStore;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
-import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,7 +33,8 @@ class OutboxRelayTest {
   private JdbcClient jdbc;
   private TransactionTemplate transactions;
   private OutboxStore store;
-  private MockProducer<String, String> producer;
+  private final List<ProducerRecord<String, String>> sent = new ArrayList<>();
+  private Producer<String, String> producer;
 
   @BeforeEach
   void setUp() {
@@ -38,10 +43,26 @@ class OutboxRelayTest {
     jdbc = JdbcClient.create(dataSource);
     transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
     store = new OutboxStore(jdbc);
-    producer = new MockProducer<>(true, new StringSerializer(), new StringSerializer());
+    sent.clear();
+    producer = acknowledgingProducer();
   }
 
-  private OutboxRelay relay(MockProducer<String, String> with, int batch) {
+  /**
+   * A producer whose every send is acknowledged at once; what it was given lands in {@code sent}.
+   */
+  @SuppressWarnings("unchecked")
+  private Producer<String, String> acknowledgingProducer() {
+    Producer<String, String> p = mock(Producer.class);
+    when(p.send(any(ProducerRecord.class)))
+        .thenAnswer(
+            call -> {
+              sent.add(call.getArgument(0));
+              return CompletableFuture.completedFuture(null);
+            });
+    return p;
+  }
+
+  private OutboxRelay relay(Producer<String, String> with, int batch) {
     return new OutboxRelay(store, jdbc, transactions, with, "campaign-updates", batch);
   }
 
@@ -58,7 +79,7 @@ class OutboxRelayTest {
     int sent = relay(producer, 100).runOnce();
 
     assertThat(sent).isEqualTo(3);
-    List<ProducerRecord<String, String>> history = producer.history();
+    List<ProducerRecord<String, String>> history = sent;
     assertThat(history)
         .extracting(ProducerRecord::key)
         .containsExactly(A.toString(), B.toString(), A.toString());
@@ -75,9 +96,9 @@ class OutboxRelayTest {
 
     relay(producer, 100).runOnce();
 
-    assertThat(producer.history()).hasSize(1);
-    assertThat(producer.history().get(0).value()).isNull();
-    assertThat(producer.history().get(0).key()).isEqualTo(A.toString());
+    assertThat(sent).hasSize(1);
+    assertThat(sent.get(0).value()).isNull();
+    assertThat(sent.get(0).key()).isEqualTo(A.toString());
   }
 
   @Test
@@ -97,14 +118,9 @@ class OutboxRelayTest {
   void whenKafkaRefusesNothingIsDeletedAndTheNextRunTriesAgain() {
     store.append(A, "{\"n\":1}");
     store.append(B, "{\"n\":2}");
-    MockProducer<String, String> down =
-        new MockProducer<>(true, new StringSerializer(), new StringSerializer()) {
-          @Override
-          public java.util.concurrent.Future<org.apache.kafka.clients.producer.RecordMetadata> send(
-              ProducerRecord<String, String> record) {
-            throw new KafkaException("broker is down");
-          }
-        };
+    @SuppressWarnings("unchecked")
+    Producer<String, String> down = mock(Producer.class);
+    when(down.send(any(ProducerRecord.class))).thenThrow(new KafkaException("broker is down"));
 
     assertThatThrownBy(() -> relay(down, 100).runOnce()).isInstanceOf(KafkaException.class);
 
@@ -142,7 +158,7 @@ class OutboxRelayTest {
     release.countDown();
     leader.join();
     assertThat(sentWhileAnotherInstanceLeads).isZero();
-    assertThat(producer.history()).isEmpty();
+    assertThat(sent).isEmpty();
     assertThat(remaining()).isEqualTo(1);
     assertThat(relay(producer, 100).runOnce()).isEqualTo(1); // the lock is free again
   }
