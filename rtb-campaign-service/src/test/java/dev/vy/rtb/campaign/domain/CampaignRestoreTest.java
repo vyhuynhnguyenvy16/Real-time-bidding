@@ -48,7 +48,7 @@ class CampaignRestoreTest {
   @Test
   void aRestoredCampaignKeepsWorkingInTheStateMachine() {
     assertThat(restoredAs(CampaignStatus.ACTIVE).pause().status()).isEqualTo(CampaignStatus.PAUSED);
-    assertThat(restoredAs(CampaignStatus.PAUSED).resume().status())
+    assertThat(restoredAs(CampaignStatus.PAUSED).resume(1).status())
         .isEqualTo(CampaignStatus.ACTIVE);
     assertThat(restoredAs(CampaignStatus.COMPLETED).archive().status())
         .isEqualTo(CampaignStatus.ARCHIVED);

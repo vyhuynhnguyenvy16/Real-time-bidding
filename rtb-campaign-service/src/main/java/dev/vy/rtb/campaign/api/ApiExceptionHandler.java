@@ -1,7 +1,9 @@
 package dev.vy.rtb.campaign.api;
 
 import dev.vy.rtb.campaign.domain.CampaignValidationException;
+import dev.vy.rtb.campaign.domain.CreativeStateException;
 import dev.vy.rtb.campaign.domain.InvalidStateException;
+import dev.vy.rtb.campaign.persistence.CreativeLimitException;
 import dev.vy.rtb.campaign.persistence.VersionConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -25,6 +27,37 @@ class ApiExceptionHandler {
   @ExceptionHandler({CampaignNotFoundException.class, MethodArgumentTypeMismatchException.class})
   ResponseEntity<Problem> notFound(HttpServletRequest request) {
     return problem(request, HttpStatus.NOT_FOUND, "NOT_FOUND", "Not found", "Campaign not found");
+  }
+
+  @ExceptionHandler(CreativeNotFoundException.class)
+  ResponseEntity<Problem> creativeNotFound(HttpServletRequest request) {
+    return problem(request, HttpStatus.NOT_FOUND, "NOT_FOUND", "Not found", "Creative not found");
+  }
+
+  @ExceptionHandler(CreativeStateException.class)
+  ResponseEntity<Problem> creativeState(HttpServletRequest request, CreativeStateException e) {
+    return problem(request, HttpStatus.CONFLICT, "INVALID_STATE", "Invalid state", e.getMessage());
+  }
+
+  @ExceptionHandler(CreativeLimitException.class)
+  ResponseEntity<Problem> creativeLimit(HttpServletRequest request, CreativeLimitException e) {
+    return problem(
+        request,
+        HttpStatus.CONFLICT,
+        "CREATIVE_LIMIT",
+        "Creative limit reached",
+        "A campaign holds at most " + e.limit() + " creatives that are not archived");
+  }
+
+  @ExceptionHandler(LastActiveCreativeException.class)
+  ResponseEntity<Problem> lastActiveCreative(
+      HttpServletRequest request, LastActiveCreativeException e) {
+    return problem(
+        request,
+        HttpStatus.CONFLICT,
+        "LAST_ACTIVE_CREATIVE",
+        "Last active creative",
+        e.getMessage());
   }
 
   @ExceptionHandler(CampaignValidationException.class)
@@ -73,7 +106,7 @@ class ApiExceptionHandler {
         HttpStatus.PRECONDITION_FAILED,
         "VERSION_CONFLICT",
         "Version conflict",
-        "The campaign changed since you read it; read it again and retry");
+        "It changed since you read it; read it again and retry");
   }
 
   @ExceptionHandler(PreconditionRequiredException.class)

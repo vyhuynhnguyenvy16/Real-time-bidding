@@ -43,6 +43,11 @@ class CampaignLifecycleTest {
   // --- activate -------------------------------------------------------------------------------
 
   @Test
+  void resumingNeedsAnActiveCreativeLikeActivating() {
+    assertInvalidState(() -> paused().resume(0));
+  }
+
+  @Test
   void activatingADraftWithACreativeMakesItActive() {
     assertThat(draft().activate(NOW, 1).status()).isEqualTo(CampaignStatus.ACTIVE);
   }
@@ -81,27 +86,27 @@ class CampaignLifecycleTest {
   @Test
   void pausingAnActiveCampaignAndResumingItGoesBackToActive() {
     assertThat(active().pause().status()).isEqualTo(CampaignStatus.PAUSED);
-    assertThat(paused().resume().status()).isEqualTo(CampaignStatus.ACTIVE);
+    assertThat(paused().resume(1).status()).isEqualTo(CampaignStatus.ACTIVE);
   }
 
   @Test
   void pauseAndResumeAreIdempotent() {
     assertThat(paused().pause().status()).isEqualTo(CampaignStatus.PAUSED);
-    assertThat(active().resume().status()).isEqualTo(CampaignStatus.ACTIVE);
+    assertThat(active().resume(1).status()).isEqualTo(CampaignStatus.ACTIVE);
   }
 
   @Test
   void aDraftCannotBePausedOrResumed() {
     assertInvalidState(() -> draft().pause());
-    assertInvalidState(() -> draft().resume());
+    assertInvalidState(() -> draft().resume(1));
   }
 
   @Test
   void aFinishedCampaignCannotBePausedOrResumed() {
     assertInvalidState(() -> completed().pause());
-    assertInvalidState(() -> completed().resume());
+    assertInvalidState(() -> completed().resume(1));
     assertInvalidState(() -> archived().pause());
-    assertInvalidState(() -> archived().resume());
+    assertInvalidState(() -> archived().resume(1));
   }
 
   // --- archive --------------------------------------------------------------------------------

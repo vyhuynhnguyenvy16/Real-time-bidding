@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,16 +44,19 @@ class CampaignController {
   private final CreativeCounter creatives;
   private final CampaignPatcher patcher;
   private final Clock clock;
+  private final TransactionOperations transactions;
 
   CampaignController(
       CampaignRepository campaigns,
       CreativeCounter creatives,
       CampaignPatcher patcher,
-      Clock clock) {
+      Clock clock,
+      TransactionOperations transactions) {
     this.campaigns = campaigns;
     this.creatives = creatives;
     this.patcher = patcher;
     this.clock = clock;
+    this.transactions = transactions;
   }
 
   @PostMapping
@@ -121,7 +125,8 @@ class CampaignController {
 
   @PostMapping("/{id}/resume")
   ResponseEntity<CampaignResponse> resume(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-    return transition(advertiserOf(jwt), id, Campaign::resume);
+    UUID advertiser = advertiserOf(jwt);
+    return transition(advertiser, id, c -> c.resume(creatives.countActive(advertiser, id)));
   }
 
   @PostMapping("/{id}/archive")
@@ -137,19 +142,24 @@ class CampaignController {
   }
 
   /**
-   * A transition that changes nothing (pause on a paused campaign) is not written. The caller sent
-   * no If-Match, so when someone else changes the campaign in between, read again and retry.
+   * A transition that changes nothing (pause on a paused campaign) is not written. The campaign row
+   * is locked while the action runs, so a creative check inside it (activate, resume) cannot
+   * interleave with a creative being paused. The caller sent no If-Match, so when an unlocked edit
+   * lands in between, read again and retry.
    */
   private ResponseEntity<CampaignResponse> transition(
       UUID advertiser, UUID id, Function<Campaign, Campaign> action) {
     for (int attempt = 1; ; attempt++) {
-      Stored<Campaign> stored = find(advertiser, id);
-      Campaign changed = action.apply(stored.value());
-      if (changed == stored.value()) {
-        return ok(stored);
-      }
       try {
-        return ok(campaigns.update(stored, changed));
+        return transactions.execute(
+            tx -> {
+              Stored<Campaign> stored =
+                  campaigns
+                      .findByIdForUpdate(advertiser, id)
+                      .orElseThrow(CampaignNotFoundException::new);
+              Campaign changed = action.apply(stored.value());
+              return changed == stored.value() ? ok(stored) : ok(campaigns.update(stored, changed));
+            });
       } catch (VersionConflictException e) {
         if (attempt >= MAX_TRANSITION_ATTEMPTS) {
           throw e;

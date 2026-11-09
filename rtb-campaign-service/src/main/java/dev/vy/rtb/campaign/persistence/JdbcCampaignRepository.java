@@ -92,6 +92,16 @@ public final class JdbcCampaignRepository implements CampaignRepository {
   }
 
   @Override
+  public Optional<Stored<Campaign>> findByIdForUpdate(UUID advertiserId, UUID campaignId) {
+    return jdbc.sql(
+            SELECT + " WHERE c.advertiser_id = :advertiserId AND c.id = :id FOR UPDATE OF c")
+        .param("advertiserId", advertiserId)
+        .param("id", campaignId)
+        .query(JdbcCampaignRepository::mapRow)
+        .optional();
+  }
+
+  @Override
   public Stored<Campaign> update(Stored<Campaign> current, Campaign changed) {
     Campaign before = current.value();
     if (!before.id().equals(changed.id())

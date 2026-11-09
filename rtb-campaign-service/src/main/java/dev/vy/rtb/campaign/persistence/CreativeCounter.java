@@ -3,8 +3,8 @@ package dev.vy.rtb.campaign.persistence;
 import java.util.UUID;
 
 /**
- * How many valid, active creatives a campaign has. Creatives arrive in a later PR; until then the
- * configured implementation reports none, so a campaign cannot be activated yet.
+ * How many active creatives a campaign has; a campaign needs at least one to be activated. The
+ * implementation is {@link JdbcCreativeRepository}.
  */
 public interface CreativeCounter {
 

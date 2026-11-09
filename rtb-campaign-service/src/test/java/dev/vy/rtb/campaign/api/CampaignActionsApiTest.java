@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import dev.vy.rtb.campaign.domain.BidStrategy;
 import dev.vy.rtb.campaign.domain.NewCampaign;
 import dev.vy.rtb.campaign.domain.PacingMode;
-import dev.vy.rtb.campaign.persistence.CreativeCounter;
+import dev.vy.rtb.campaign.persistence.CreativeRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 /** Seam: POST /api/v1/campaigns/{id}/activate | pause | resume | archive. */
 class CampaignActionsApiTest extends ApiTestBase {
 
-  @MockitoBean CreativeCounter creatives;
+  @MockitoBean CreativeRepository creatives;
 
   private static NewCampaign input(Instant endAt) {
     return NewCampaign.builder()
