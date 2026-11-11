@@ -21,3 +21,9 @@ rtb:
   security:
     # HS256 secret, at least 32 bytes. No default on purpose: the service must not start without it.
     jwt-secret: ${JWT_SECRET}
+  outbox:
+    relay:
+      # Off by default; the deployed service turns it on and points it at Kafka.
+      enabled: ${OUTBOX_RELAY_ENABLED:false}
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      topic: campaign-updates

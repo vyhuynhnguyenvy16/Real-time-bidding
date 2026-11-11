@@ -29,7 +29,7 @@ final class PostgresTestSupport {
 
   static void emptyTables() {
     JdbcClient.create(dataSource())
-        .sql("TRUNCATE creatives, campaign_targeting, campaigns, advertisers CASCADE")
+        .sql("TRUNCATE outbox, creatives, campaign_targeting, campaigns, advertisers CASCADE")
         .update();
   }
 }
