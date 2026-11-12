@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: rtb-bidder-service
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8082}
+
+rtb:
+  bidder:
+    # No default on purpose: the service must not start without a key for the exchanges.
+    exchange-key: ${EXCHANGE_KEY}
+    kafka:
+      enabled: ${BIDDER_KAFKA_ENABLED:true}
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      topic: campaign-updates
