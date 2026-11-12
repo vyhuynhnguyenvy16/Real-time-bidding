@@ -19,10 +19,11 @@ import org.springframework.transaction.support.TransactionOperations;
  *
  * <p>Delivery is at least once: rows are deleted only after Kafka has acknowledged every record of
  * the batch, so a crash or a failure in between sends some records again. Consumers drop repeats
- * (an event carries its campaign version). Only one instance relays at a time: the whole batch runs
- * in a transaction that holds a PostgreSQL advisory lock, and an instance that cannot get it does
- * nothing. If the broker is down the exception rolls the transaction back and the rows stay put, so
- * the API keeps working and the backlog drains when Kafka returns.
+ * and anything older than what they hold (an event carries a {@code revision}, see {@link
+ * CampaignEvent}). Only one instance relays at a time: the whole batch runs in a transaction that
+ * holds a PostgreSQL advisory lock, and an instance that cannot get it does nothing. If the broker
+ * is down the exception rolls the transaction back and the rows stay put, so the API keeps working
+ * and the backlog drains when Kafka returns.
  */
 public final class OutboxRelay {
 
@@ -74,7 +75,11 @@ public final class OutboxRelay {
         ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG,
         5_000,
         ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG,
-        10_000);
+        10_000,
+        // An event holds up to 20 creatives of 20 KB each, escaped as JSON (TopicSetup matches
+        // this).
+        ProducerConfig.MAX_REQUEST_SIZE_CONFIG,
+        2 * 1024 * 1024);
   }
 
   /**
@@ -102,17 +107,35 @@ public final class OutboxRelay {
     if (rows.isEmpty()) {
       return 0;
     }
-    List<Future<RecordMetadata>> acks = new ArrayList<>(rows.size());
-    for (OutboxStore.Row row : rows) {
-      acks.add(
-          producer.send(new ProducerRecord<>(topic, row.campaignId().toString(), row.payload())));
-    }
-    producer.flush();
-    for (Future<RecordMetadata> ack : acks) {
-      await(ack);
+    try {
+      List<Future<RecordMetadata>> acks = new ArrayList<>(rows.size());
+      for (OutboxStore.Row row : rows) {
+        acks.add(
+            producer.send(new ProducerRecord<>(topic, row.campaignId().toString(), row.payload())));
+      }
+      producer.flush();
+      for (Future<RecordMetadata> ack : acks) {
+        await(ack);
+      }
+    } catch (RuntimeException e) {
+      drainAfterFailure();
+      throw e;
     }
     store.delete(rows.stream().map(OutboxStore.Row::id).toList());
     return rows.size();
+  }
+
+  /**
+   * Records of a failed batch may still be in the producer's buffer or in flight. Wait for them to
+   * settle before the transaction ends and the lock is released: otherwise another instance could
+   * relay newer events first and these stale ones would land after them.
+   */
+  private void drainAfterFailure() {
+    try {
+      producer.flush();
+    } catch (RuntimeException ignored) {
+      // the original failure is the one worth reporting
+    }
   }
 
   private static void await(Future<RecordMetadata> ack) {

@@ -24,7 +24,10 @@ public final class CampaignEventFactory {
    *     PAUSED and COMPLETED campaigns still get a full event so the bidder stops bidding on them.
    */
   public static Optional<CampaignEvent> build(
-      Stored<Campaign> campaign, List<Stored<Creative>> creatives, Instant emittedAt) {
+      Stored<Campaign> campaign,
+      List<Stored<Creative>> creatives,
+      long revision,
+      Instant emittedAt) {
     Campaign c = campaign.value();
     if (c.status() == CampaignStatus.ARCHIVED) {
       return Optional.empty();
@@ -72,6 +75,7 @@ public final class CampaignEventFactory {
                         s.version()))
             .toList();
     return Optional.of(
-        new CampaignEvent(CampaignEvent.SCHEMA_VERSION, emittedAt.toString(), view, active));
+        new CampaignEvent(
+            CampaignEvent.SCHEMA_VERSION, revision, emittedAt.toString(), view, active));
   }
 }
