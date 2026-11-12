@@ -107,6 +107,7 @@ class CampaignEventFactoryTest {
                 stored(draft()),
                 List.of(
                     creative(1, true, false), creative(2, false, false), creative(3, false, true)),
+                1L,
                 T)
             .orElseThrow();
 

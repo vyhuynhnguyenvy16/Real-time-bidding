@@ -48,7 +48,9 @@ class OutboxApiTest extends ApiTestBase {
   }
 
   private ResultActions post(UUID advertiser, String url, String body) throws Exception {
-    var request = post(url).header(AUTHORIZATION, bearer(advertiser));
+    var request =
+        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+            .header(AUTHORIZATION, bearer(advertiser));
     if (body != null) {
       request.contentType(MediaType.APPLICATION_JSON).content(body);
     }
