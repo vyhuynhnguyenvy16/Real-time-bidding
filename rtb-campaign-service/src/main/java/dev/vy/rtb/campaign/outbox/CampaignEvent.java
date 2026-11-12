@@ -8,9 +8,19 @@ import java.util.UUID;
  * its ACTIVE creatives, as a single self-contained document. Instants are ISO-8601 strings and
  * money is micro-USD, so the shape does not depend on how a mapper is configured. Adding optional
  * fields is compatible; anything else needs a new {@code schemaVersion}.
+ *
+ * <p>{@code revision} grows with every event of the same campaign, in commit order (it is the
+ * outbox id, taken while the campaign row is locked). Unlike {@code campaign.version}, which is the
+ * campaign's ETag and does not move when only a creative changes, it tells a consumer which of two
+ * events is newer: apply an event only if its revision is above the one already applied. A
+ * tombstone has no payload, so it carries no revision; an archived campaign is final.
  */
 public record CampaignEvent(
-    int schemaVersion, String emittedAt, CampaignView campaign, List<CreativeView> creatives) {
+    int schemaVersion,
+    long revision,
+    String emittedAt,
+    CampaignView campaign,
+    List<CreativeView> creatives) {
 
   public static final int SCHEMA_VERSION = 1;
 

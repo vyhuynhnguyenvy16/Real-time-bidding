@@ -31,6 +31,10 @@ final class CreativeValidator {
 
   private static final int FLAGS = Pattern.CASE_INSENSITIVE;
 
+  // C0 controls other than tab, LF and CR. JSON escapes each as 6 bytes, which could push an event
+  // past what Kafka accepts; no banner needs them.
+  private static final Pattern CONTROL = Pattern.compile("[\\x01-\\x08\\x0B\\x0C\\x0E-\\x1F]");
+
   private static final Pattern FORBIDDEN_TAG =
       Pattern.compile(
           "<[ \\t\\n\\r\\f\\x0B/]*(script|iframe|object|embed|base|meta|form|link|style|svg|math"
@@ -90,6 +94,11 @@ final class CreativeValidator {
     if (!isStorableText(markup)) {
       violations.add(new Violation("markup", "must be valid text without NUL characters"));
       return;
+    }
+    if (CONTROL.matcher(markup).find()) {
+      violations.add(
+          new Violation(
+              "markup", "must not contain control characters other than tab, newline and return"));
     }
     if (FORBIDDEN_TAG.matcher(markup).find()
         || JS_URL.matcher(markup).find()

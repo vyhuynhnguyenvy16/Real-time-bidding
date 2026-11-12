@@ -74,6 +74,10 @@ class CreativeParityTest {
         Arguments.of("${USER_ID}", true),
         Arguments.of("${AUCTION_PRICE", true),
         Arguments.of("${", true),
+        Arguments.of("<p>bell\u0007</p>", true),
+        Arguments.of("<p>escape\u001b[0m</p>", true),
+        Arguments.of("<p>vt\u000b</p>", true),
+        Arguments.of("<p>tab\tnewline\ncr\r are fine</p>", false),
         Arguments.of("${auction_price}", true),
         // accepted by both (same answer for Unicode whitespace on both sides)
         Arguments.of(

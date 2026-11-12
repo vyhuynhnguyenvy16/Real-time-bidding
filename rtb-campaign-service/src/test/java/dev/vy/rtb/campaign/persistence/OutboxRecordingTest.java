@@ -17,6 +17,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,20 +65,20 @@ class OutboxRecordingTest {
         new OutboxCreativeRepository(plainCreatives, plainCampaigns, recorder, transactions);
   }
 
+  private static NewCampaign.Builder input() {
+    return NewCampaign.builder()
+        .name("Outbox")
+        .dailyBudgetMicros(100_000_000)
+        .totalBudgetMicros(1_500_000_000)
+        .maxBidCpmMicros(2_000_000)
+        .bidStrategy(BidStrategy.fixedCpm(850_000))
+        .pacingMode(PacingMode.EVEN)
+        .startAt(Instant.parse("2026-11-01T00:00:00Z"))
+        .endAt(Instant.parse("2026-12-10T00:00:00Z"));
+  }
+
   private static Campaign draft() {
-    return Campaign.draft(
-        CAMPAIGN,
-        ADVERTISER,
-        NewCampaign.builder()
-            .name("Outbox")
-            .dailyBudgetMicros(100_000_000)
-            .totalBudgetMicros(1_500_000_000)
-            .maxBidCpmMicros(2_000_000)
-            .bidStrategy(BidStrategy.fixedCpm(850_000))
-            .pacingMode(PacingMode.EVEN)
-            .startAt(Instant.parse("2026-11-01T00:00:00Z"))
-            .endAt(Instant.parse("2026-12-10T00:00:00Z"))
-            .build());
+    return Campaign.draft(CAMPAIGN, ADVERTISER, input().build());
   }
 
   private static Creative creative(int n) {
@@ -172,6 +177,60 @@ class OutboxRecordingTest {
 
     assertThat(rows()).isEmpty();
     assertThat(campaigns.findById(ADVERTISER, CAMPAIGN)).isEmpty();
+  }
+
+  @Test
+  void everyEventCarriesARevisionEqualToItsOutboxIdAndRevisionsOnlyGrow() {
+    Stored<Campaign> campaign = campaigns.insert(draft());
+    Stored<Creative> creative = creatives.insert(creative(1));
+    creatives.update(creative, creative.value().pause());
+    campaigns.update(campaign, campaign.value().revise(input().name("Renamed").build()));
+
+    List<Map<String, Object>> rows = rows();
+    long previous = 0;
+    for (Map<String, Object> row : rows) {
+      long revision = payload(row).get("revision").asLong();
+      assertThat(revision).isEqualTo(((Number) row.get("id")).longValue());
+      assertThat(revision).isGreaterThan(previous);
+      previous = revision;
+    }
+    // A creative change moves the revision although campaign.version stays: that is its purpose.
+    assertThat(payload(rows.get(1)).get("campaign").get("version").asLong())
+        .isEqualTo(payload(rows.get(2)).get("campaign").get("version").asLong());
+  }
+
+  @Test
+  void twoWritersOnTheSameCampaignLeaveALastEventThatShowsBothChanges() throws Exception {
+    campaigns.insert(draft());
+    Stored<Creative> first = creatives.insert(creative(1));
+    Stored<Creative> second = creatives.insert(creative(2));
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Future<?> a =
+          pool.submit(
+              () -> {
+                start.await();
+                return creatives.update(first, first.value().pause());
+              });
+      Future<?> b =
+          pool.submit(
+              () -> {
+                start.await();
+                return creatives.update(second, second.value().pause());
+              });
+      start.countDown();
+      a.get(20, TimeUnit.SECONDS);
+      b.get(20, TimeUnit.SECONDS);
+    } finally {
+      pool.shutdownNow();
+    }
+
+    List<Map<String, Object>> rows = rows();
+    JsonNode last = payload(rows.get(rows.size() - 1));
+    // Without the campaign row lock the later id could carry a state that misses the other change.
+    assertThat(last.get("creatives")).isEmpty();
+    assertThat(rows).hasSize(5);
   }
 
   @Test

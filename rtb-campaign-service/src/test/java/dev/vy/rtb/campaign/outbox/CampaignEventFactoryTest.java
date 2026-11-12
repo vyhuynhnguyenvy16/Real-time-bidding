@@ -74,10 +74,11 @@ class CampaignEventFactoryTest {
   @Test
   void aCampaignBecomesOneSelfContainedEvent() {
     Optional<CampaignEvent> event =
-        CampaignEventFactory.build(stored(draft()), List.of(creative(1, true, false)), T);
+        CampaignEventFactory.build(stored(draft()), List.of(creative(1, true, false)), 42, T);
 
     JsonNode root = json(event.orElseThrow());
     assertThat(root.get("schemaVersion").asInt()).isEqualTo(1);
+    assertThat(root.get("revision").asLong()).isEqualTo(42);
     assertThat(root.get("emittedAt").asText()).isEqualTo("2026-11-09T10:00:00Z");
     JsonNode campaign = root.get("campaign");
     assertThat(campaign.get("id").asText()).isEqualTo(CAMPAIGN.toString());
@@ -118,7 +119,7 @@ class CampaignEventFactoryTest {
   void aPausedCampaignStillGetsAFullEventSoTheBidderStopsBidding() {
     Campaign paused = draft().activate(Instant.parse("2026-11-09T09:00:00Z"), 1).pause();
 
-    CampaignEvent event = CampaignEventFactory.build(stored(paused), List.of(), T).orElseThrow();
+    CampaignEvent event = CampaignEventFactory.build(stored(paused), List.of(), 1, T).orElseThrow();
 
     assertThat(event.campaign().status()).isEqualTo("PAUSED");
   }
@@ -127,6 +128,16 @@ class CampaignEventFactoryTest {
   void anArchivedCampaignIsATombstone() {
     Campaign archived = draft().archive();
 
-    assertThat(CampaignEventFactory.build(stored(archived), List.of(), T)).isEmpty();
+    assertThat(CampaignEventFactory.build(stored(archived), List.of(), 1, T)).isEmpty();
+  }
+
+  @Test
+  void aCompletedCampaignStillGetsAFullEvent() {
+    Campaign completed = draft().activate(Instant.parse("2026-11-09T09:00:00Z"), 1).complete();
+
+    CampaignEvent event =
+        CampaignEventFactory.build(stored(completed), List.of(), 1, T).orElseThrow();
+
+    assertThat(event.campaign().status()).isEqualTo("COMPLETED");
   }
 }

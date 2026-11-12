@@ -18,6 +18,9 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class OutboxRecorder {
 
+  /** Well under the 2 MB the producer and the topic accept (see OutboxRelay, TopicSetup). */
+  static final int MAX_EVENT_CHARS = 1_500_000;
+
   private final CampaignRepository campaigns;
   private final CreativeRepository creatives;
   private final OutboxStore store;
@@ -45,7 +48,17 @@ public final class OutboxRecorder {
             .orElseThrow(
                 () -> new IllegalStateException("Campaign " + campaignId + " vanished mid-write"));
     List<Stored<Creative>> all = creatives.listByCampaign(advertiserId, campaignId);
-    Optional<CampaignEvent> event = CampaignEventFactory.build(campaign, all, clock.instant());
-    store.append(campaignId, event.map(json::writeValueAsString).orElse(null));
+    // The id is drawn while the campaign row is locked (by the write being recorded), so ids of one
+    // campaign grow in commit order and can serve as the event's revision.
+    long revision = store.nextId();
+    Optional<CampaignEvent> event =
+        CampaignEventFactory.build(campaign, all, revision, clock.instant());
+    String payload = event.map(json::writeValueAsString).orElse(null);
+    if (payload != null && payload.length() > MAX_EVENT_CHARS) {
+      // Refuse the write rather than queue a record Kafka would reject forever and block the relay.
+      throw new IllegalStateException(
+          "Event of campaign " + campaignId + " is too large: " + payload.length() + " characters");
+    }
+    store.append(revision, campaignId, payload);
   }
 }

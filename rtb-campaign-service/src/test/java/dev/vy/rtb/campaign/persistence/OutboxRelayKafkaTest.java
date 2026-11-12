@@ -1,6 +1,7 @@
 package dev.vy.rtb.campaign.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.vy.rtb.campaign.outbox.OutboxRelay;
 import dev.vy.rtb.campaign.outbox.OutboxStore;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -21,6 +23,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +53,11 @@ class OutboxRelayKafkaTest {
   @AfterAll
   static void stopKafka() {
     kafka.stop();
+  }
+
+  @AfterEach
+  void closeProducer() {
+    producer.close();
   }
 
   @BeforeEach
@@ -137,6 +145,26 @@ class OutboxRelayKafkaTest {
     assertThat(forB).hasSize(2);
     assertThat(forB.get(0)).isEqualTo("{\"v\":1}");
     assertThat(forB.get(1)).isNull();
+  }
+
+  @Test
+  void anExistingTopicThatIsNotCompactedIsRefused() throws Exception {
+    try (Admin admin = Admin.create(Map.of("bootstrap.servers", kafka.getBootstrapServers()))) {
+      admin
+          .createTopics(
+              List.of(
+                  new NewTopic("not-compacted", 1, (short) 1)
+                      .configs(Map.of("cleanup.policy", "delete"))))
+          .all()
+          .get(10, TimeUnit.SECONDS);
+    }
+
+    assertThatThrownBy(
+            () -> TopicSetup.ensure(kafka.getBootstrapServers(), "not-compacted", 1, (short) 1))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("must be compact");
+    // An existing compacted topic is fine, and so is asking twice.
+    TopicSetup.ensure(kafka.getBootstrapServers(), TOPIC, 1, (short) 1);
   }
 
   @Test

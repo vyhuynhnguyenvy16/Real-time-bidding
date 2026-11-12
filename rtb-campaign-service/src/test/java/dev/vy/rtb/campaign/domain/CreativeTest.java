@@ -77,6 +77,8 @@ class CreativeTest {
         Arguments.of("markup", valid().markup("<svg onload=alert(1)>").build()),
         Arguments.of("markup", valid().markup("<img src=\"https://a.b/${AUCTION_PRICE\">").build()),
         Arguments.of("markup", valid().markup("<p>a\u0000b</p>").build()),
+        Arguments.of("markup", valid().markup("<p>bell\u0007</p>").build()),
+        Arguments.of("markup", valid().markup("<p>esc\u001b</p>").build()),
         Arguments.of("markup", valid().markup("<p>\ud800</p>").build()),
         Arguments.of("name", valid().name("a\u0000b").build()),
         Arguments.of("name", valid().name("\udc00").build()),

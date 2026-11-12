@@ -3,7 +3,9 @@ package dev.vy.rtb.campaign.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.vy.rtb.campaign.outbox.OutboxRelay;
@@ -123,6 +125,10 @@ class OutboxRelayTest {
     when(down.send(any(ProducerRecord.class))).thenThrow(new KafkaException("broker is down"));
 
     assertThatThrownBy(() -> relay(down, 100).runOnce()).isInstanceOf(KafkaException.class);
+
+    // Anything still buffered must settle before the lock is released, or a stale record could
+    // land after newer ones sent by the next leader.
+    verify(down, atLeastOnce()).flush();
 
     assertThat(remaining()).isEqualTo(2);
     assertThat(relay(producer, 100).runOnce()).isEqualTo(2); // Kafka is back

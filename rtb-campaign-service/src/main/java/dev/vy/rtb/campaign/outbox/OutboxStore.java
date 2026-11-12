@@ -17,10 +17,25 @@ public final class OutboxStore {
     this.jdbc = jdbc;
   }
 
+  /** Reserves the id of the next row, so the payload can carry it as its revision. */
+  public long nextId() {
+    return jdbc.sql("SELECT nextval(pg_get_serial_sequence('outbox', 'id'))")
+        .query(Long.class)
+        .single();
+  }
+
   public void append(UUID campaignId, String payloadOrNull) {
+    append(nextId(), campaignId, payloadOrNull);
+  }
+
+  /** {@code id} must come from {@link #nextId()}. */
+  public void append(long id, UUID campaignId, String payloadOrNull) {
     jdbc.sql(
-            "INSERT INTO outbox (campaign_id, payload) VALUES (:campaignId, CAST(:payload AS"
-                + " json))")
+            """
+            INSERT INTO outbox (id, campaign_id, payload)
+            VALUES (:id, :campaignId, CAST(:payload AS json))
+            """)
+        .param("id", id)
         .param("campaignId", campaignId)
         .param("payload", payloadOrNull)
         .update();
@@ -29,7 +44,10 @@ public final class OutboxStore {
   /** Oldest rows first; ids only grow, so id order is write order for one campaign. */
   public List<Row> oldest(int limit) {
     return jdbc.sql(
-            "SELECT id, campaign_id, payload::text AS payload FROM outbox ORDER BY id LIMIT :limit")
+            """
+            SELECT id, campaign_id, payload::text AS payload
+            FROM outbox ORDER BY id LIMIT :limit
+            """)
         .param("limit", limit)
         .query(
             (rs, n) ->
